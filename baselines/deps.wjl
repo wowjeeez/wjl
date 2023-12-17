@@ -1,0 +1,11 @@
+dep testModule::innerModule
+dep testModule::otherInnerModule::file
+dep otherTestModule::inner::file::function
+
+val x = "hello there general kenobi \" escaped \" "
+val y = 'hello there general kenobi but with single quotes'
+val num = 1
+val num2 = 1_0_0
+/*test comment
+fun val x
+*/
