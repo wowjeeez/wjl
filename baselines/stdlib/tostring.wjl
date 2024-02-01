@@ -1,0 +1,24 @@
+@wjl.staticDispatch(forwardArgs = true)
+public interface ToString {
+    func toString(): string
+}
+
+@wjl.elide("static")
+impl ToString for boolean {
+    func toString() = @@wjl_internal
+}
+
+@wjl.elide("static")
+impl ToString for int {
+    func toString(radix: StrictIntRange<2, 36, true>? = 10) = @@wjl_internal
+}
+
+@wjl.elide("static")
+impl ToString for float {
+       func toString(radix: StrictIntRange<2, 36, true>? = 10) = @@wjl_internal
+}
+
+//TC will still be present so we prevent .toString() calls on arrays with elements that dont have ToString implemented, but we leave the actual stringification to the V8 runtime
+impl ToString for Array<T: ToString> {
+    func toString() = @@wjl_internal
+}

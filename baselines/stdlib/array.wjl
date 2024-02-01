@@ -1,0 +1,104 @@
+public impl Iterable for Array<T> {}
+
+
+public func Array<T>.map<E>(mapper: (value: T, index: int) => E) {
+    val output: E[] = []
+    for (val (value, index) in this) {
+        output.push(mapper(value, index))
+    }
+    return output
+}
+
+
+public func Array<T>.map<E: Promise>(mapper: (value: T, index: int) => E) {
+    val output: E[] = []
+    for (val (value, index) in this) {
+        output.push(await mapper(value, index))
+    }
+    return output
+}
+
+public func Array<T>.reverse() {
+    val output: T[] = []
+    for (val (value) in this) {
+        output.pushBack(value)
+    }
+    return output
+}
+
+public func Array<T>.mapRight<E>(mapper: (value: T, index: int) => E) = reverse |> map(mapper)
+
+public func Array<T>.each(predicate: (value: T, index: int) => void) {
+    for (val (value, index) in this) {
+        predicate(value, index)
+    } 
+}
+
+public func Array<T>.each(predicate: (value: T, index: int) => Promise<void>) {
+    for (val (value, index) in this) {
+        await predicate(value, index)
+    } 
+}
+
+public func Array<T>.every(condition: (value: T, index: int) => boolean) {
+    var res = false
+    for (val (value, index) in this) {
+        res = condition(value, index)
+    }
+
+    return res 
+}
+
+public func Array<T>.every(condition: (value: T, index: int) => Promise<boolean>) {
+    var res = false
+    for (val (value, index) in this) {
+        res = await condition(value, index)
+    }
+
+    return res 
+}
+
+public func Array<T>.every(condition: (value: T, index: int) => boolean) {
+    for (val (value, index) in this) {
+        if (condition(value, index)) {
+            return true
+        }
+    }
+
+    return false
+}
+
+public func Array<T>.every(condition: (value: T, index: int) => Promise<boolean>) {
+    for (val (value, index) in this) {
+        if (await condition(value, index)) {
+            return true
+        }
+    }
+
+    return false
+}
+
+public func Array<T>.one(condition: (value: T, index: int) => boolean) {
+     var res = false
+    for (val (value, index) in this) {
+        val didPass = condition(value, index)
+        if (didPass && res) {
+            return false
+        }
+        res = didPass
+    }
+    return res
+}
+
+public func Array<T>.one(condition: (value: T, index: int) => Promise<boolean>) {
+     var res = false
+    for (val (value, index) in this) {
+        val didPass = await condition(value, index)
+        if (didPass && res) {
+            return false
+        }
+        res = didPass
+    }
+    return res
+}
+

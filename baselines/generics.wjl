@@ -1,3 +1,0 @@
-fun testGenericFunc<exact T: String, exact M: if T : String && T : Display then true else false>() {
-    val inner = "X"
-}

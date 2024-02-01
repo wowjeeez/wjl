@@ -1,19 +1,15 @@
-use crate::lexer::tokenize;
-use crate::parser::dbg_print::dbg_vec;
-use crate::parser::parse_token_stream;
+use crate::errors::ErrorReporter;
+use crate::lexer::lex_stream;
+
 mod lexer;
-mod parser;
-mod iter_util;
-mod utils;
+mod iter;
+mod tokens;
+mod errors;
 
 fn main() {
-    let baseline_dep = include_str!("../baselines/deps.wjl").to_string();
-    let stream = tokenize("return@test".to_string()).unwrap();
-    dbg!(&stream);
-    let parsed = parse_token_stream(stream);
-    if parsed.is_err() {
-        dbg!(parsed);
-    } else {
-        println!("{:?}", dbg_vec(parsed.unwrap()));
-    }
+    let baseline_dep = include_str!("../baselines/str_val.wjl").to_string();
+    let mut reporter = ErrorReporter::for_file("str_val.wjl".to_string(), &baseline_dep);
+    let stream = lex_stream(&baseline_dep, &mut reporter);
+    dbg!(reporter);
+    dbg!(stream);
 }

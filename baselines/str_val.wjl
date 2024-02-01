@@ -1,0 +1,3 @@
+val value = "hello man im a string ${10 + 10} \" yo"
+
+if x == 10 {} else if {}

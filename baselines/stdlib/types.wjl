@@ -1,0 +1,5 @@
+// Will not accept arbitrary numbers, only ones that are known at compile time, or are verified with a check.
+public type StrictIntRange<S: int, E: int, Inclusive: bool = false> = @@wjl_internal
+
+// Will raise a compiler warning on arbitrary numbers, that aren't known at compile time
+public type LenientIntRange<S: int, E: int, Inclusive: bool = false> = @@wjl_internal

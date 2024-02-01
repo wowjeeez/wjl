@@ -1,0 +1,38 @@
+@wjl.staticDispatch(forwardArgs = true)
+public classdef Promise<T, E = *> {
+    then<R>(func: (result: T) => R): Promise<R>
+    catch<R>(func: (err: E) => R): Promise<R>
+    finally<R>(func: () => R): Promise<R>
+    constructor<T = void, E = *>(body: (resolve: (value: T) => void, reject: (err: E) => void)): Promise<T, E>
+}
+
+@wjl.staticDispatch(forwardArgs = true)
+public func Promise::all<T, Err, I: Promise<T, Err>(inputs: Iterable<I>): Promise<Array<T>, Err>
+
+
+public struct PromiseOutput<T, Err> {
+    status: "fulfilled" | "rejected",
+    value: T?,
+    reason: Err? 
+}
+
+@wjl.staticDispatch(forwardArgs = true)
+public func Promise::allSettled<T, Err, I: Promise<T, Err>(inputs: Iterable<I>): Promise<Array<PromiseOutput<T, Err>, void>
+
+@wjl.staticDispatch(forwardArgs = true)
+public func Promise::race<T, Err, I: Promise<T, Err>(inputs: Iterable<I>): Promise<T, Err>
+
+public struct PromiseWithResolvers<T, Err> {
+    promise: Promise<T, Err>,
+    resolve: (value: T) => void,
+    reject: (err: Err) => void
+}
+
+@wjl.staticDispatch()
+public func Promise::withResolvers<T, Err>(): PromiseWithResolvers<T, Err>
+
+@wjl.staticDispatch()
+public func Promise::resolve<T>(value: T): Promise<T, void>
+
+@wjl.staticDispatch()
+public func Promise::reject<T>(err: T): Promise<void, T>
