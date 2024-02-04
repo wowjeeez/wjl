@@ -123,7 +123,7 @@ pub fn lex_stream(input: &String, reporter: &mut ErrorReporter) -> Vec<Span> {
             continue
         }
 
-        if char.is_alphabetic() || char == '_' || char == '`' {
+        if char.is_alphabetic() || char == '_' || char == '`' { //TODO! rewrite this  to work like ident -> is keyword then push and cnt -> while loop matching . :: ? !
             let start = iter.get_index().unwrap();
             let ident = if char == '`' {iter.pull_literal('`', reporter)} else {iter.pull_ident()};
             let ident = if char == '`' {
