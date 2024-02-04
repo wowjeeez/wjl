@@ -1,0 +1,5 @@
+val value = "hello man im a string ${10 + 10} \" yo"
+val num = 10+0b10000000000000000000000000000000;
+if x == 10 {} else if {}
+
+x::lol.idx

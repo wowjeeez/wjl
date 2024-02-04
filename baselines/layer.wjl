@@ -1,6 +1,0 @@
-typelayer "express" {
-    external struct Express {
-        external get(path: String) -> void
-    }
-    external express() -> Express
-}
