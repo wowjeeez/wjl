@@ -1,5 +1,5 @@
-mod reporter;
 mod builder;
+mod reporter;
 #[allow(unused)]
 pub use builder::{ErrorLevel, WjlError};
 

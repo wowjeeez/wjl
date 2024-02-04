@@ -4,7 +4,7 @@ use crate::tokens::tokens::Token;
 pub struct Span {
     token: Token,
     pub(crate) start: usize,
-    pub(crate) end: usize
+    pub(crate) end: usize,
 }
 
 impl Token {
@@ -12,8 +12,12 @@ impl Token {
         Span {
             token: self,
             start,
-            end
+            end,
         }
+    }
+
+    pub fn span_zeroed(self) -> Span {
+        self.span(0, 0)
     }
 }
 

@@ -1,10 +1,12 @@
 use crate::errors::ErrorReporter;
 use crate::lexer::lex_stream;
 
-mod lexer;
-mod iter;
-mod tokens;
 mod errors;
+mod iter;
+mod lexer;
+mod tokens;
+#[macro_use]
+mod helpers;
 
 fn main() {
     let baseline_dep = include_str!("../baselines/str_val.wjl").to_string();

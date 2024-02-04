@@ -4,7 +4,7 @@ use crate::errors::WjlError;
 pub struct ErrorReporter<'a> {
     file: &'a String,
     file_name: String,
-    errors: Vec<WjlError>
+    errors: Vec<WjlError>,
 }
 
 impl ErrorReporter<'_> {
@@ -12,7 +12,8 @@ impl ErrorReporter<'_> {
         let mut error = error.into();
         let (line_pos, char_pos) = self.find_line_number_and_char_position(error.char);
         if error.end_char.is_some() {
-            let (end_l_pos, end_c_pos) = self.find_line_number_and_char_position(error.end_char.unwrap());
+            let (end_l_pos, end_c_pos) =
+                self.find_line_number_and_char_position(error.end_char.unwrap());
             error._set_loc_ranged(line_pos, char_pos, end_l_pos, end_c_pos);
         } else {
             error._set_loc(line_pos, char_pos);
@@ -51,7 +52,11 @@ impl ErrorReporter<'_> {
         ErrorReporter {
             file_name,
             file: content,
-            errors: vec![]
+            errors: vec![],
         }
+    }
+
+    pub fn is_ok(&self) -> bool {
+        self.errors.len() == 0
     }
 }

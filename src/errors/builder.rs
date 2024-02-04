@@ -5,12 +5,13 @@ pub struct WjlError {
     message: String,
     fixes: Vec<String>,
     level: ErrorLevel,
-    location: (usize, usize, Option<(usize, usize)>)
+    cause: Option<String>,
+    location: (usize, usize, Option<(usize, usize)>),
 }
 #[derive(Debug, Clone)]
 pub enum ErrorLevel {
     WARN,
-    ERROR
+    ERROR,
 }
 
 impl WjlError {
@@ -22,8 +23,15 @@ impl WjlError {
             level: ErrorLevel::ERROR,
             location: (0, 0, None),
             end_char: None,
+            cause: None,
         }
     }
+
+    pub fn cause<T: Into<String>>(&mut self, msg: T) -> &mut Self {
+        self.cause = Some(msg.into());
+        return self;
+    }
+
     pub fn message<T: Into<String>>(&mut self, msg: T) -> &mut Self {
         self.message = msg.into();
         self
@@ -38,17 +46,23 @@ impl WjlError {
         self
     }
 
-    pub fn _set_loc(&mut self, line: usize, pos: usize) -> &mut Self  {
+    pub fn _set_loc(&mut self, line: usize, pos: usize) -> &mut Self {
         self.location = (line, pos, None);
         self
     }
 
-    pub fn _set_loc_ranged(&mut self, from_line: usize, from_pos: usize, to_line: usize, to_pos: usize) -> &mut Self  {
+    pub fn _set_loc_ranged(
+        &mut self,
+        from_line: usize,
+        from_pos: usize,
+        to_line: usize,
+        to_pos: usize,
+    ) -> &mut Self {
         self.location = (from_line, from_pos, Some((to_line, to_pos)));
         self
     }
 
-    pub fn end_char(&mut self, end: usize) -> &mut Self {
+    pub fn set_end_char(&mut self, end: usize) -> &mut Self {
         self.end_char = Some(end);
         self
     }

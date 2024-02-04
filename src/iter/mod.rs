@@ -1,2 +1,2 @@
 mod generic;
-pub use generic::{GenericIterator, PeekableIterator, wrap_iter};
+pub use generic::{wrap_iter, GenericIterator, PeekableIterator};

@@ -1,68 +1,13 @@
+use crate::tokens::span::Span;
 use either::Either;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum IdentKind {
     DEFAULT(String),
-    BACKTICK(String)
+    BACKTICK(String),
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PathSegment {
-    is_bw_colon: Option<bool>, // None is when this is the beginning of the path
-    content: IdentKind
-}
-
-impl PathSegment {
-    pub fn backtick(content: String) -> PathSegment {
-        PathSegment {
-            is_bw_colon: None,
-            content: IdentKind::BACKTICK(content)
-        }
-    }
-
-    pub fn default(content: String) -> PathSegment {
-        PathSegment {
-            is_bw_colon: None,
-            content: IdentKind::DEFAULT(content)
-        }
-    }
-
-    pub fn backtick_colon(content: String, colon: bool) -> PathSegment {
-        PathSegment {
-            is_bw_colon: Some(colon),
-            content: IdentKind::BACKTICK(content)
-        }
-    }
-
-    pub fn default_colon(content: String, colon: bool) -> PathSegment {
-        PathSegment {
-            is_bw_colon: Some(colon),
-            content: IdentKind::DEFAULT(content)
-        }
-    }
-}
-
-
-impl Token {
-    pub fn get_if_is_1_len_ident_no_bt(&self) -> Option<String> {
-        if let Token::PATH(inner) = self {
-            if inner.len() != 1 {
-                return None
-            }
-            let tok = &inner.first().unwrap().content;
-            if let IdentKind::DEFAULT(inner) = tok {
-                return Some(inner.clone())
-            }
-            return None
-
-        }
-        return None
-    }
-}
-
-
-
-pub type Literal =  Vec<Either<String, Vec<Token>>>;
+pub type Literal = Vec<Either<String, Vec<Token>>>;
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[allow(non_camel_case_types, unused)]
 pub enum Token {
@@ -102,6 +47,7 @@ pub enum Token {
     LINE_BREAK,
     PIPE,
     PERIOD,
+    DOUBLE_COLON,
     KEYWORD_VAR,
     KEYWORD_VAL,
     KEYWORD_CONST,
@@ -121,6 +67,7 @@ pub enum Token {
     KEYWORD_IN,
     KEYWORD_WHILE,
     KEYWORD_MATCH,
+    KEYWORD_ENUM,
     KEYWORD_TRY,
     KEYWORD_CATCH,
     KEYWORD_THIS,
@@ -139,7 +86,7 @@ pub enum Token {
     KEYWORD_ELSE_IF,
     KEYWORD_YIELD,
     OP_SPREAD,
-    PATH(Vec<PathSegment>),
+    IDENT(IdentKind),
     ASSIGN,
     ASSIGN_SUM,
     ASSIGN_DIV,
@@ -159,6 +106,12 @@ pub enum Token {
     OP_FUNC_SUB,
     WJL_COMPILER_PLACEHOLDER,
     DELIMITER,
+    WHITESPACE,
     PIPE_OP,
-    NONCE
+    FLOAT(String),
+    INT(i64),
+    BINARY_NUMBER(String),
+    OCTAL_NUMBER(String),
+    HEX_NUMBER(String),
+    NONCE,
 }
