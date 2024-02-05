@@ -15,6 +15,6 @@ fn main() {
     let mut reporter = ErrorReporter::for_file("str_val.wjl".to_string(), &baseline_dep);
     let stream = lex_stream(&baseline_dep, &mut reporter);
     dbg!(reporter);
-   // dbg!(stream);
+   // dbg!(&stream);
     stream.print();
 }

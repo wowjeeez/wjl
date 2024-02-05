@@ -6,7 +6,7 @@ use crate::tokens::Token::{LITERAL_DOUBLE, LITERAL_SINGLE};
 use crate::tokens::{IdentKind, Token};
 use either::Either;
 use std::fmt::Write;
-use colored::Colorize;
+use colored::{ColoredString, Colorize};
 type Span = GenericSpan<Token>;
 
 impl PeekableIterator<char> {
@@ -423,8 +423,6 @@ fn match_char(char: char) -> Token {
         '&' => Token::BIT_AND,
         '~' => Token::BIT_NOT,
         '^' => Token::BIT_XOR,
-        _ if char == '\n' => Token::LINE_BREAK,
-        _ if char.is_whitespace() => Token::WHITESPACE,
         _ => Token::NONCE,
     }
 }
@@ -447,6 +445,45 @@ pub fn lex_stream(input: &String, reporter: &mut ErrorReporter) -> Vec<Span> {
                     stream.push(Token::KEYWORD_ELSE_IF.span(start, end));
                 }
             }
+        }
+        if char == '/' {
+            let next = iter.peek_next();
+            if next.map_or(false, |x| x == '/').eq(&true) {
+                let mut comment_content = String::new();
+                let start = iter.get_index().unwrap();
+                iter.next();
+                'inner: while let Some(next) = iter.next() {
+                    if next as u8 == 0x0A {
+                        break 'inner
+                    }
+                    comment_content.write_char(next).expect("Failed to write char");
+                }
+                stream.push(Token::COMMENT(comment_content.trim().to_string()).span(start, iter.get_index().unwrap()));
+                continue
+            } else if next.map_or(false, |x| x == '*').eq(&true) {
+                let start = iter.get_index().unwrap();
+                iter.next();
+                let mut line = String::new();
+                let mut lines = vec![];
+                while let Some(next) = iter.next() {
+                    if next as u8 == 0x0A {
+                        lines.push(line.trim().to_string());
+                        line.clear();
+                        continue
+                    }
+                    if next == '*' && iter.peek_next().map_or(true, |x| x == '/').eq(&true) {
+                        lines.push(line.trim().to_string());
+                        line.clear();
+                        iter.next();
+                        break
+                    }
+                    line.write_char(next).expect("Failed to write char into buf");
+                }
+                let end = iter.get_index().unwrap();
+                stream.push(Token::COMMENT_ML(lines).span(start, end));
+                continue
+            }
+            continue
         }
         if char == '"' {
             let curr = iter.get_index().unwrap();
@@ -575,6 +612,12 @@ pub fn lex_stream(input: &String, reporter: &mut ErrorReporter) -> Vec<Span> {
             stream.push(tok.span(start, start));
             continue
         }
+        if char.is_whitespace() {
+            if char as u8 == 0x0A {
+                stream.push(Token::DELIMITER.span(start, start));
+            }
+            continue
+        }
         reporter.add(WjlError::char(start).message(format!("Unexpected character: {}", char)).ok());
     }
     stream
@@ -590,118 +633,126 @@ impl IsValidIdentStart for char {
     }
 }
 
+
+impl Span {
+    pub fn to_colored_str(&self) -> ColoredString {
+        match self.get_inner() {
+            Token::ANGLE_LEFT => "<".bright_yellow(),
+            Token::ANGLE_RIGHT => ">".bright_yellow(),
+            Token::BRACE_LEFT => "{".bright_yellow(),
+            Token::BRACE_RIGHT => "}".bright_yellow(),
+            Token::PAREN_LEFT => "(".bright_yellow(),
+            Token::PAREN_RIGHT => ")".bright_yellow(),
+            Token::BRACKET_LEFT => "[".bright_yellow(),
+            Token::BRACKET_RIGHT => "]".bright_yellow(),
+            Token::LEFT_GTE => ">=".green(),
+            Token::RIGHT_GTE => "<=".green(),
+            Token::EQ => "==".green(),
+            Token::N_EQ => "!=".green(),
+            Token::COLON => ":".green(),
+            Token::SUBTRACT => "-".green(),
+            Token::SUM => "+".green(),
+            Token::MUL => "*".green(),
+            Token::DIV => "/".green(),
+            Token::MOD => "%".green(),
+            Token::BIT_AND => "&".green(),
+            Token::AND => "&&".green(),
+            Token::OR => "||".green(),
+            Token::BIT_XOR => "^".green(),
+            Token::BIT_NOT => "~".green(),
+            Token::BIT_ZERO_FILL_LEFT_SHIFT => "<<".green(),
+            Token::BIT_S_RIGHT_SHIFT => ">>".green(),
+            Token::BIT_ZERO_FILL_RIGHT_SHIFT => ">>>".green(),
+            Token::HASH => "#".green(),
+            Token::AT => "@".green(),
+            Token::QMARK => "?".green(),
+            Token::EXCL_MARK => "!".green(),
+            Token::BACKSLASH => "\\".green(),
+            Token::COMMA => ",".green(),
+            Token::SEMI_COLON => ";".red(),
+            Token::LINE_BREAK => "\n".into(),
+            Token::PIPE => "|".green(),
+            Token::PERIOD => ".".green(),
+            Token::DOUBLE_COLON => "::".green(),
+            Token::KEYWORD_VAR => "var".blue(),
+            Token::KEYWORD_VAL => "val".blue(),
+            Token::KEYWORD_CONST => "const".blue(),
+            Token::MOD_KEYWORD_ONCE => "once".blue(),
+            Token::MOD_KEYWORD_PUBLIC => "public".blue(),
+            Token::MOD_KEYWORD_PROTECTED => "protected".blue(),
+            Token::MOD_KEYWORD_INTERNAL => "internal".blue(),
+            Token::KEYWORD_FUNC => "func".blue(),
+            Token::KEYWORD_CLASS => "class".blue(),
+            Token::KEYWORD_IMPL => "impl".blue(),
+            Token::KEYWORD_FOR => "for".blue(),
+            Token::KEYWORD_RETURN => "return".blue(),
+            Token::KEYWORD_BREAK => "break".blue(),
+            Token::KEYWORD_CONTINUE => "continue".blue(),
+            Token::KEYWORD_STRUCT => "struct".blue(),
+            Token::KEYWORD_AWAIT => "await".blue(),
+            Token::KEYWORD_IN => "in".blue(),
+            Token::KEYWORD_WHILE => "while".blue(),
+            Token::KEYWORD_MATCH => "match".blue(),
+            Token::KEYWORD_ENUM => "enum".blue(),
+            Token::KEYWORD_TRY => "try".blue(),
+            Token::KEYWORD_CATCH => "catch".blue(),
+            Token::KEYWORD_THIS => "this".red(),
+            Token::KEYWORD_TYPE => "type".blue(),
+            Token::KEYWORD_CONSTRUCTOR => "constructor".red(),
+            Token::KEYWORD_CLASSDEF => "clasdef".blue(),
+            Token::KEYWORD_FUNCDEF => "funcdef".blue(),
+            Token::KEYWORD_USE => "use".blue(),
+            Token::KEYWORD_EXT => "external".blue(),
+            Token::KEYWORD_OPERATOR => "operator".blue(),
+            Token::KEYWORD_DECORATOR => "decorator".blue(),
+            Token::KEYWORD_REFLECT => "reflect".blue(),
+            Token::KEYWORD_INTERFACE => "interface".blue(),
+            Token::KEYWORD_IF => "if".blue(),
+            Token::KEYWORD_ELSE => "else".blue(),
+            Token::KEYWORD_ELSE_IF => "else if".blue(),
+            Token::KEYWORD_YIELD => "yield".blue(),
+            Token::OP_SPREAD => "...".red(),
+            Token::IDENT(kind) => match kind {
+                IdentKind::DEFAULT(content) => format!("[IDENT_DEFAULT: {}]", content).red(),
+                IdentKind::BACKTICK(content) => format!("[IDENT_BACKTICK: {}]", content).red()
+            },
+            Token::ASSIGN => "=".green(),
+            Token::ASSIGN_SUM => "+=".green(),
+            Token::ASSIGN_DIV => "/=".green(),
+            Token::ASSIGN_MOD => "%=".green(),
+            Token::ASSIGN_MUL => "*=".green(),
+            Token::ASSIGN_SUB => "-=".green(),
+            Token::INCR => "++".green(),
+            Token::DECR => "--".green(),
+            Token::PWR => "**".green(),
+            Token::ARROW => "=>".green(),
+            LITERAL_DOUBLE(_) => "<double quote literal>".red(),
+            LITERAL_SINGLE(_) => "<single quote literal>".red(),
+            Token::OP_FUNC_SUM => "sum".green(),
+            Token::OP_FUNC_DIV => "div".green(),
+            Token::OP_FUNC_MOD => "mod".green(),
+            Token::OP_FUNC_SUB => "sub".green(),
+            Token::WJL_COMPILER_PLACEHOLDER => "@@wjl_internal".black(),
+            Token::DELIMITER => ";".green(),
+            Token::WHITESPACE => " ".into(),
+            Token::PIPE_OP => "|>".yellow(),
+            Token::FLOAT(f) => format!("[float: {}]", f).red(),
+            Token::INT(int, bigint) => format!("[int: {}, is_bigint: {}]", int, bigint).red(),
+            Token::BINARY_NUMBER(int, bigint) => format!("[binary: {}, is_bigint: {}]", int, bigint).red(),
+            Token::OCTAL_NUMBER(int, bigint) => format!("[octal: {}, is_bigint: {}]", int, bigint).red(),
+            Token::HEX_NUMBER(int, bigint) => format!("[hex: {}, is_bigint: {}]", int, bigint).red(),
+            Token::NONCE => "<<NONCE>>".black(),
+            Token::COMMENT(inner) => format!("[comment: {}]", inner).red(),
+            Token::COMMENT_ML(inner) => format!("[ml_comment: {:?}]", inner).red()
+        }
+    }
+}
+
 impl Print for Vec<Span> {
     fn print(&self) {
         for tok in self {
-            let token = tok.get_inner();
-            let str = match token {
-                Token::ANGLE_LEFT => "<".bright_yellow(),
-                Token::ANGLE_RIGHT => ">".bright_yellow(),
-                Token::BRACE_LEFT => "{".bright_yellow(),
-                Token::BRACE_RIGHT => "}".bright_yellow(),
-                Token::PAREN_LEFT => "(".bright_yellow(),
-                Token::PAREN_RIGHT => ")".bright_yellow(),
-                Token::BRACKET_LEFT => "[".bright_yellow(),
-                Token::BRACKET_RIGHT => "]".bright_yellow(),
-                Token::LEFT_GTE => ">=".green(),
-                Token::RIGHT_GTE => "<=".green(),
-                Token::EQ => "==".green(),
-                Token::N_EQ => "!=".green(),
-                Token::COLON => ":".green(),
-                Token::SUBTRACT => "-".green(),
-                Token::SUM => "+".green(),
-                Token::MUL => "*".green(),
-                Token::DIV => "/".green(),
-                Token::MOD => "%".green(),
-                Token::BIT_AND => "&".green(),
-                Token::AND => "&&".green(),
-                Token::OR => "||".green(),
-                Token::BIT_XOR => "^".green(),
-                Token::BIT_NOT => "~".green(),
-                Token::BIT_ZERO_FILL_LEFT_SHIFT => "<<".green(),
-                Token::BIT_S_RIGHT_SHIFT => ">>".green(),
-                Token::BIT_ZERO_FILL_RIGHT_SHIFT => ">>>".green(),
-                Token::HASH => "#".green(),
-                Token::AT => "@".green(),
-                Token::QMARK => "?".green(),
-                Token::EXCL_MARK => "!".green(),
-                Token::BACKSLASH => "\\".green(),
-                Token::COMMA => ",".green(),
-                Token::SEMI_COLON => ";".red(),
-                Token::LINE_BREAK => "\n".into(),
-                Token::PIPE => "|".green(),
-                Token::PERIOD => ".".green(),
-                Token::DOUBLE_COLON => "::".green(),
-                Token::KEYWORD_VAR => "var".blue(),
-                Token::KEYWORD_VAL => "val".blue(),
-                Token::KEYWORD_CONST => "const".blue(),
-                Token::MOD_KEYWORD_ONCE => "once".blue(),
-                Token::MOD_KEYWORD_PUBLIC => "public".blue(),
-                Token::MOD_KEYWORD_PROTECTED => "protected".blue(),
-                Token::MOD_KEYWORD_INTERNAL => "internal".blue(),
-                Token::KEYWORD_FUNC => "func".blue(),
-                Token::KEYWORD_CLASS => "class".blue(),
-                Token::KEYWORD_IMPL => "impl".blue(),
-                Token::KEYWORD_FOR => "for".blue(),
-                Token::KEYWORD_RETURN => "return".blue(),
-                Token::KEYWORD_BREAK => "break".blue(),
-                Token::KEYWORD_CONTINUE => "continue".blue(),
-                Token::KEYWORD_STRUCT => "struct".blue(),
-                Token::KEYWORD_AWAIT => "await".blue(),
-                Token::KEYWORD_IN => "in".blue(),
-                Token::KEYWORD_WHILE => "while".blue(),
-                Token::KEYWORD_MATCH => "match".blue(),
-                Token::KEYWORD_ENUM => "enum".blue(),
-                Token::KEYWORD_TRY => "try".blue(),
-                Token::KEYWORD_CATCH => "catch".blue(),
-                Token::KEYWORD_THIS => "this".red(),
-                Token::KEYWORD_TYPE => "type".blue(),
-                Token::KEYWORD_CONSTRUCTOR => "constructor".red(),
-                Token::KEYWORD_CLASSDEF => "clasdef".blue(),
-                Token::KEYWORD_FUNCDEF => "funcdef".blue(),
-                Token::KEYWORD_USE => "use".blue(),
-                Token::KEYWORD_EXT => "external".blue(),
-                Token::KEYWORD_OPERATOR => "operator".blue(),
-                Token::KEYWORD_DECORATOR => "decorator".blue(),
-                Token::KEYWORD_REFLECT => "reflect".blue(),
-                Token::KEYWORD_INTERFACE => "interface".blue(),
-                Token::KEYWORD_IF => "if".blue(),
-                Token::KEYWORD_ELSE => "else".blue(),
-                Token::KEYWORD_ELSE_IF => "else if".blue(),
-                Token::KEYWORD_YIELD => "yield".blue(),
-                Token::OP_SPREAD => "...".red(),
-                Token::IDENT(kind) => match kind {
-                    IdentKind::DEFAULT(content) => format!("[IDENT_DEFAULT: {}]", content).red(),
-                    IdentKind::BACKTICK(content) => format!("[IDENT_BACKTICK: {}]", content).red()
-                },
-                Token::ASSIGN => "=".green(),
-                Token::ASSIGN_SUM => "+=".green(),
-                Token::ASSIGN_DIV => "/=".green(),
-                Token::ASSIGN_MOD => "%=".green(),
-                Token::ASSIGN_MUL => "*=".green(),
-                Token::ASSIGN_SUB => "-=".green(),
-                Token::INCR => "++".green(),
-                Token::DECR => "--".green(),
-                Token::PWR => "**".green(),
-                Token::ARROW => "=>".green(),
-                LITERAL_DOUBLE(_) => "<double quote literal>".red(),
-                LITERAL_SINGLE(_) => "<single quote literal>".red(),
-                Token::OP_FUNC_SUM => "sum".green(),
-                Token::OP_FUNC_DIV => "div".green(),
-                Token::OP_FUNC_MOD => "mod".green(),
-                Token::OP_FUNC_SUB => "sub".green(),
-                Token::WJL_COMPILER_PLACEHOLDER => "@@wjl_internal".black(),
-                Token::DELIMITER => ";".green(),
-                Token::WHITESPACE => " ".into(),
-                Token::PIPE_OP => "|>".yellow(),
-                Token::FLOAT(f) => format!("[float: {}]", f).red(),
-                Token::INT(int, bigint) => format!("[int: {}, is_bigint: {}]", int, bigint).red(),
-                Token::BINARY_NUMBER(int, bigint) => format!("[binary: {}, is_bigint: {}]", int, bigint).red(),
-                Token::OCTAL_NUMBER(int, bigint) => format!("[octal: {}, is_bigint: {}]", int, bigint).red(),
-                Token::HEX_NUMBER(int, bigint) => format!("[hex: {}, is_bigint: {}]", int, bigint).red(),
-                Token::NONCE => "<<NONCE>>".black()
-            };
-            print!("{}", str);
+            let str = tok.to_colored_str();
+            print!(" {} ", str);
         }
     }
 }

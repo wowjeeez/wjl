@@ -112,5 +112,7 @@ pub enum Token {
     BINARY_NUMBER(String, bool),
     OCTAL_NUMBER(String, bool),
     HEX_NUMBER(String, bool),
+    COMMENT(String),
+    COMMENT_ML(Vec<String>),
     NONCE,
 }

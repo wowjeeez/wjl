@@ -33,7 +33,7 @@ impl ErrorReporter<'_> {
             if current_index == char_index {
                 return (line_number, char_position);
             }
-            if c == '\n' {
+            if c as u8 == 0x0A {
                 line_number += 1;
                 char_position = 0;
             }
