@@ -15,5 +15,5 @@ fn main() {
     let stream = lex_stream(&baseline_dep, &mut reporter);
     dbg!(reporter);
    // dbg!(stream);
-    println!("{}", stream.print());
+    stream.print();
 }

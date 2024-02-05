@@ -546,10 +546,22 @@ pub fn lex_stream(input: &String, reporter: &mut ErrorReporter) -> Vec<Span> {
             push_t(Token::BIT_S_RIGHT_SHIFT);
             continue
         }
+        if tok == Token::ASSIGN && next_tok == Token::ANGLE_RIGHT {
+            push_t(Token::ARROW);
+            continue
+        }
+
+        if tok == Token::PIPE && next_tok == Token::ANGLE_RIGHT {
+            push_t(Token::PIPE_OP);
+            continue
+        }
+
         if tok == Token::ANGLE_LEFT && next_tok == Token::ANGLE_LEFT && iter.peek_n(2).map_or(false, |x| x == '>') {
             stream.push(Token::BIT_ZERO_FILL_RIGHT_SHIFT.span(start, start + 2));
             continue
         }
+
+
         if tok != Token::NONCE {
             stream.push(tok.span(start, start));
             continue
@@ -570,8 +582,7 @@ impl IsValidIdentStart for char {
 }
 
 impl Print for Vec<Span> {
-    fn print(&self) -> String {
-        let mut ret = String::new();
+    fn print(&self) {
         for tok in self {
             let token = tok.get_token();
             let str = match token {
@@ -681,8 +692,7 @@ impl Print for Vec<Span> {
                 Token::HEX_NUMBER(int, bigint) => format!("[hex: {}, is_bigint: {}]", int, bigint).red(),
                 Token::NONCE => "<<NONCE>>".black()
             };
-            ret.write_str(&*str).expect("Failed to write char to stream");
+            print!("{}", str);
         }
-        ret
     }
 }
