@@ -555,6 +555,14 @@ pub fn lex_stream(input: &String, reporter: &mut ErrorReporter) -> Vec<Span> {
             push_t(Token::PIPE_OP);
             continue
         }
+        if tok == Token::SUM && next_tok == Token::SUM {
+            push_t(Token::INCR);
+            continue
+        }
+        if tok == Token::SUBTRACT && next_tok == Token::SUBTRACT {
+            push_t(Token::DECR);
+            continue
+        }
 
         if tok == Token::ANGLE_LEFT && next_tok == Token::ANGLE_LEFT && iter.peek_n(2).map_or(false, |x| x == '>') {
             stream.push(Token::BIT_ZERO_FILL_RIGHT_SHIFT.span(start, start + 2));
