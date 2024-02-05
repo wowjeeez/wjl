@@ -124,7 +124,7 @@ impl PeekableIterator<TokenSpan> {
             })   
         }
 
-        if next.get_inner() == Token::COMMA {
+        if next.get_inner() == Token::COLON {
             // alias
         }
         if next.get_inner() == Token::ASSIGN {

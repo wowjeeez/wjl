@@ -68,6 +68,7 @@ pub enum Token {
     KEYWORD_WHILE,
     KEYWORD_MATCH,
     KEYWORD_ENUM,
+    KEYWORD_AS,
     KEYWORD_TRY,
     KEYWORD_CATCH,
     KEYWORD_THIS,

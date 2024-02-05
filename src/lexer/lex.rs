@@ -129,6 +129,7 @@ impl PeekableIterator<char> {
             "if" => Token::KEYWORD_IF,
             "else" => Token::KEYWORD_ELSE,
             "yield" => Token::KEYWORD_YIELD,
+            "as" => Token::KEYWORD_AS,
             _ => Token::NONCE,
         };
         return if keyword != Token::NONCE {
