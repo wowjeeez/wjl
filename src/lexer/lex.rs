@@ -26,7 +26,7 @@ impl PeekableIterator<char> {
         }
         if !delim_found {
             reporter.add(
-                WjlError::char(start_index)
+                WjlError::lex(start_index)
                     .message(format!("Unmatched literal delimiter: {}", matcher))
                     .set_end_char(self.get_content().len() - 1)
                     .ok(),
@@ -60,7 +60,7 @@ impl PeekableIterator<char> {
         let start = self.get_index().unwrap();
         if curr.is_none() {
             reporter.add(
-                WjlError::char(self.get_index().unwrap())
+                WjlError::lex(self.get_index().unwrap())
                     .message("Expected identifier or backtick, got nothing.")
                     .ok(),
             );
@@ -191,7 +191,7 @@ impl PeekableIterator<char> {
                     if buf.contains(".") {
                 let res = buf.parse::<f64>();
                 if res.is_err() {
-                    reporter.add(WjlError::char(start)
+                    reporter.add(WjlError::lex(start)
                         .set_end_char(end)
                         .cause(res.err().unwrap().to_string())
                         .message("Failed to parse float, this is very likely due to the fact that the number is not inside the 64 bit signed float range.")
@@ -205,7 +205,7 @@ impl PeekableIterator<char> {
                     if treat_as_bigint(&buf, 10) {
                         stream.push(Token::INT(buf, true).span(start, end));
                     } else {
-                        reporter.add(WjlError::char(start)
+                        reporter.add(WjlError::lex(start)
                         .set_end_char(end)
                         .cause(res.err().unwrap().to_string())
                         .message("Failed to parse integer.").ok());
@@ -229,7 +229,7 @@ impl PeekableIterator<char> {
             if char == 'f' {
                 if buf.contains('.') {
                     reporter.add(
-                        WjlError::char(self.get_index().unwrap())
+                        WjlError::lex(self.get_index().unwrap())
                             .message("Cannot mix decimal notation with <num>f shorthand syntax.")
                             .pot_fix(format!("Remove the f after {}", buf.pop().unwrap())) // safe to pop here as we dont give a single shit about accuracy after an error is reported
                             .ok(),
@@ -244,7 +244,7 @@ impl PeekableIterator<char> {
                 let next = self.peek_next();
                 if next.is_none() {
                     reporter.add(
-                        WjlError::char(self.get_index().unwrap())
+                        WjlError::lex(self.get_index().unwrap())
                             .message("Expected identifier or number, got nothing.")
                             .ok(),
                     );
@@ -253,7 +253,7 @@ impl PeekableIterator<char> {
                 let next = next.unwrap();
                 if is_float_from_shorthand && next.is_digit(10) {
                     reporter.add(
-                        WjlError::char(self.get_index().unwrap())
+                        WjlError::lex(self.get_index().unwrap())
                             .message("Cannot mix decimal notation with <num>f shorthand syntax.")
                             .pot_fix(format!("Remove the . after {}", buf.pop().unwrap())) // safe to pop here as we dont give a single shit about accuracy after an error is reported
                             .ok(),
@@ -291,7 +291,7 @@ impl PeekableIterator<char> {
                 continue;
             } else if char.is_digit(10) {
                 reporter.add(
-                    WjlError::char(self.get_index().unwrap())
+                    WjlError::lex(self.get_index().unwrap())
                         .message(
                             "Invalid octal number. Only numbers 0-7 are allowed in octal numbers.",
                         )
@@ -308,7 +308,7 @@ impl PeekableIterator<char> {
             if treat_as_bigint(&buf, 8) {
                 stream.push(Token::OCTAL_NUMBER(buf, true).span(start, self.get_index().unwrap()));
             } else {
-                reporter.add(WjlError::char(start)
+                reporter.add(WjlError::lex(start)
                     .set_end_char(self.get_index().unwrap())
                     .cause(i64_res.err().unwrap().to_string())
                     .message("Failed to parse octal integer.").ok());
@@ -340,7 +340,7 @@ impl PeekableIterator<char> {
             if treat_as_bigint(&buf, 16) {
                 stream.push(Token::HEX_NUMBER(buf, true).span(start, self.get_index().unwrap()));
             } else {
-                reporter.add(WjlError::char(start)
+                reporter.add(WjlError::lex(start)
                     .set_end_char(self.get_index().unwrap())
                     .cause(i64_res.err().unwrap().to_string())
                     .message("Failed to parse hex integer.").ok());
@@ -368,7 +368,7 @@ impl PeekableIterator<char> {
                 continue;
             } else if char.is_digit(10) {
                 reporter.add(
-                    WjlError::char(self.get_index().unwrap())
+                    WjlError::lex(self.get_index().unwrap())
                         .message(
                             "Invalid binary number. Only 0s and 1s are allowed in binary numbers.",
                         )
@@ -385,7 +385,7 @@ impl PeekableIterator<char> {
             if treat_as_bigint(&buf, 2) {
                 stream.push(Token::BINARY_NUMBER(buf, true).span(start, self.get_index().unwrap()));
             } else {
-                reporter.add(WjlError::char(start)
+                reporter.add(WjlError::lex(start)
                     .set_end_char(self.get_index().unwrap())
                     .cause(i64_res.err().unwrap().to_string())
                     .message("Failed to parse binary integer.").ok());
@@ -618,7 +618,7 @@ pub fn lex_stream(input: &String, reporter: &mut ErrorReporter) -> Vec<Span> {
             }
             continue
         }
-        reporter.add(WjlError::char(start).message(format!("Unexpected character: {}", char)).ok());
+        reporter.add(WjlError::lex(start).message(format!("Unexpected character: {}", char)).ok());
     }
     stream
 }

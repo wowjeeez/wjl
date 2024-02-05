@@ -1,3 +1,5 @@
+use std::hint::black_box;
+
 #[derive(Debug, Clone)]
 pub struct WjlError {
     pub char: usize,
@@ -7,6 +9,7 @@ pub struct WjlError {
     level: ErrorLevel,
     cause: Option<String>,
     location: (usize, usize, Option<(usize, usize)>),
+    is_from_lex: bool
 }
 #[derive(Debug, Clone)]
 pub enum ErrorLevel {
@@ -15,7 +18,7 @@ pub enum ErrorLevel {
 }
 
 impl WjlError {
-    pub fn char(index: usize) -> WjlError {
+    pub fn lex(index: usize) -> WjlError {
         WjlError {
             char: index,
             message: String::from("No error message provided."),
@@ -24,8 +27,23 @@ impl WjlError {
             location: (0, 0, None),
             end_char: None,
             cause: None,
+            is_from_lex: true
         }
     }
+
+    pub fn ast(index: usize) -> WjlError {
+        WjlError {
+            char: index,
+            message: String::from("No error message provided."),
+            fixes: vec![],
+            level: ErrorLevel::ERROR,
+            location: (0, 0, None),
+            end_char: None,
+            cause: None,
+            is_from_lex: false
+        }
+    }
+
 
     pub fn cause<T: Into<String>>(&mut self, msg: T) -> &mut Self {
         self.cause = Some(msg.into());

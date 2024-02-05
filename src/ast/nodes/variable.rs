@@ -22,26 +22,25 @@ pub enum AssignmentKind {
     INCR
 }
 #[derive(Clone, Debug)]
-pub struct Name {
-    is_object_destruct: bool,
-    is_array_destruct: bool,
-    entries: Option<Vec<DestructuringEntry>>,
-    string_name: Option<String>,
-    is_btick: Option<String>
+pub struct NamedRef {
+    pub(crate) is_object_destruct: bool,
+    pub(crate) is_array_destruct: bool,
+    pub(crate) entries: Option<Vec<DestructuringEntry>>,
+    pub(crate) string_name: Option<String>,
+    pub(crate) is_btick: Option<bool>
 }
 #[derive(Clone, Debug)]
 pub struct DestructuringEntry {
-    name: Name,
-    default_value: Option<Vec<Ast>>,
-    alias: Option<String>,
-    is_alias_btick: Option<bool>,
-    is_rest: bool
+    pub(crate) name: NamedRef,
+    pub(crate) default_value: Option<Vec<Ast>>,
+    pub(crate) alias: Option<NamedRef>,
+    pub(crate) is_rest: bool
 }
 
 
 #[derive(Clone, Debug)]
 pub struct VariableDeclaration {
-    name: Name,
+    name: NamedRef,
     is_backtick_name: String,
     kind: VarDeclKind,
     initializer: Box<Ast>
