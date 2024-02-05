@@ -1,11 +1,12 @@
 use crate::errors::{ErrorReporter, WjlError};
-use crate::helpers::treat_as_bigint;
+use crate::helpers::{Print, treat_as_bigint};
 use crate::iter::{wrap_iter, GenericIterator, PeekableIterator};
 use crate::tokens::span::Span;
 use crate::tokens::Token::{LITERAL_DOUBLE, LITERAL_SINGLE};
 use crate::tokens::{IdentKind, Token};
 use either::Either;
 use std::fmt::Write;
+use colored::Colorize;
 
 impl PeekableIterator<char> {
     pub fn pull_literal(&mut self, matcher: char, reporter: &mut ErrorReporter) -> String {
@@ -200,17 +201,17 @@ impl PeekableIterator<char> {
             } else {
                 let res = buf.parse::<i64>();
                 if res.is_err() {
-                    if treat_as_bigint(buf, 10) {
-                        stream.push(Token::INT(res.unwrap()).span(start, end));
+                    if treat_as_bigint(&buf, 10) {
+                        stream.push(Token::INT(buf, true).span(start, end));
                     } else {
-                            reporter.add(WjlError::char(start)
+                        reporter.add(WjlError::char(start)
                         .set_end_char(end)
                         .cause(res.err().unwrap().to_string())
-                        .message("Failed to parse integer, this is very likely due to the fact that the number is not inside the 64 bit signed integer range.").ok());
-                    return
+                        .message("Failed to parse integer.").ok());
                     }
+                    return
                 }
-                stream.push(Token::INT(res.unwrap()).span(start, end));
+                stream.push(Token::INT(buf, false).span(start, end));
             }
                 }
             };
@@ -303,13 +304,17 @@ impl PeekableIterator<char> {
         // buf.parse fails here since it assumes a 10 based radix
         let i64_res = i64::from_str_radix(&*buf, 8);
         if i64_res.is_err() {
-            reporter.add(WjlError::char(start)
-                .set_end_char(self.get_index().unwrap())
-                .cause(i64_res.err().unwrap().to_string())
-                .message("Failed to parse octal integer, this is very likely due to the fact that the number is not inside the 64 bit signed integer range.").ok());
+            if treat_as_bigint(&buf, 8) {
+                stream.push(Token::OCTAL_NUMBER(buf, true).span(start, self.get_index().unwrap()));
+            } else {
+                reporter.add(WjlError::char(start)
+                    .set_end_char(self.get_index().unwrap())
+                    .cause(i64_res.err().unwrap().to_string())
+                    .message("Failed to parse octal integer.").ok());
+            }
             return;
         }
-        stream.push(Token::OCTAL_NUMBER(buf).span(start, self.get_index().unwrap()));
+        stream.push(Token::OCTAL_NUMBER(buf, false).span(start, self.get_index().unwrap()));
     }
 
     pub fn parse_hex_number(&mut self, stream: &mut Vec<Span>, reporter: &mut ErrorReporter) {
@@ -331,16 +336,22 @@ impl PeekableIterator<char> {
         // buf.parse fails here since it assumes a 10 based radix
         let i64_res = i64::from_str_radix(&*buf, 16);
         if i64_res.is_err() {
-            reporter.add(WjlError::char(start)
-                .set_end_char(self.get_index().unwrap())
-                .cause(i64_res.err().unwrap().to_string())
-                .message("Failed to parse hex integer, this is very likely due to the fact that the number is not inside the 64 bit signed integer range.").ok());
+            if treat_as_bigint(&buf, 16) {
+                stream.push(Token::HEX_NUMBER(buf, true).span(start, self.get_index().unwrap()));
+            } else {
+                reporter.add(WjlError::char(start)
+                    .set_end_char(self.get_index().unwrap())
+                    .cause(i64_res.err().unwrap().to_string())
+                    .message("Failed to parse hex integer.").ok());
+            }
             return;
         }
-        stream.push(Token::HEX_NUMBER(buf).span(start, self.get_index().unwrap()));
+        stream.push(Token::HEX_NUMBER(buf, false).span(start, self.get_index().unwrap()));
     }
 
-    pub fn parse_exp_number(&mut self, stream: &mut Vec<Span>, reporter: &mut ErrorReporter) {}
+    pub fn parse_exp_number(&mut self, stream: &mut Vec<Span>, reporter: &mut ErrorReporter) {
+        todo!()
+    }
 
     pub fn parse_bin_number(&mut self, stream: &mut Vec<Span>, reporter: &mut ErrorReporter) {
         let mut buf = String::new();
@@ -370,13 +381,50 @@ impl PeekableIterator<char> {
         // buf.parse fails here since it assumes a 10 based radix
         let i64_res = i64::from_str_radix(&*buf, 2);
         if i64_res.is_err() {
-            reporter.add(WjlError::char(start)
-                .set_end_char(self.get_index().unwrap())
-                .cause(i64_res.err().unwrap().to_string())
-                .message("Failed to parse binary integer, this is very likely due to the fact that the number is not inside the 64 bit signed integer range.").ok());
+            if treat_as_bigint(&buf, 2) {
+                stream.push(Token::BINARY_NUMBER(buf, true).span(start, self.get_index().unwrap()));
+            } else {
+                reporter.add(WjlError::char(start)
+                    .set_end_char(self.get_index().unwrap())
+                    .cause(i64_res.err().unwrap().to_string())
+                    .message("Failed to parse binary integer.").ok());
+            }
             return;
         }
-        stream.push(Token::BINARY_NUMBER(buf).span(start, self.get_index().unwrap()));
+        stream.push(Token::BINARY_NUMBER(buf, false).span(start, self.get_index().unwrap()));
+    }
+}
+
+fn match_char(char: char) -> Token {
+    match char {
+        '!' => Token::EXCL_MARK,
+        '#' => Token::HASH,
+        '.' => Token::PERIOD,
+        '<' => Token::ANGLE_LEFT,
+        '>' => Token::ANGLE_RIGHT,
+        ':' => Token::COLON,
+        '(' => Token::PAREN_LEFT,
+        ')' => Token::PAREN_RIGHT,
+        '[' => Token::BRACKET_LEFT,
+        ']' => Token::BRACKET_RIGHT,
+        '{' => Token::BRACE_LEFT,
+        '}' => Token::BRACE_RIGHT,
+        '?' => Token::QMARK,
+        '-' => Token::SUBTRACT,
+        '+' => Token::SUM,
+        '*' => Token::MUL,
+        '/' => Token::DIV,
+        '%' => Token::MOD,
+        '=' => Token::ASSIGN,
+        '|' => Token::PIPE,
+        '@' => Token::AT,
+        ';' => Token::DELIMITER,
+        '&' => Token::BIT_AND,
+        '~' => Token::BIT_NOT,
+        '^' => Token::BIT_XOR,
+        _ if char == '\n' => Token::LINE_BREAK,
+        _ if char.is_whitespace() => Token::WHITESPACE,
+        _ => Token::NONCE,
     }
 }
 
@@ -419,39 +467,94 @@ pub fn lex_stream(input: &String, reporter: &mut ErrorReporter) -> Vec<Span> {
             continue;
         }
 
-        // check binary, hex and octal numbers here
-
         if char.is_valid_ident_start() {
             iter.parse_ident(&mut stream, reporter);
             continue;
         }
 
-        let tok = match char {
-            '!' => Token::EXCL_MARK,
-            '#' => Token::HASH,
-            '.' => Token::PERIOD,
-            '<' => Token::ANGLE_LEFT,
-            '>' => Token::ANGLE_RIGHT,
-            '(' => Token::PAREN_LEFT,
-            ')' => Token::PAREN_RIGHT,
-            '[' => Token::BRACKET_LEFT,
-            ']' => Token::BRACKET_RIGHT,
-            '{' => Token::BRACE_LEFT,
-            '}' => Token::BRACE_RIGHT,
-            '?' => Token::QMARK,
-            '-' => Token::SUBTRACT,
-            '+' => Token::SUM,
-            '*' => Token::MUL,
-            '/' => Token::DIV,
-            '%' => Token::MOD,
-            '=' => Token::ASSIGN,
-            '|' => Token::PIPE,
-            '@' => Token::AT,
-            ';' => Token::DELIMITER,
-            _ if char.is_whitespace() => Token::WHITESPACE,
-            _ if char == '\n' => Token::LINE_BREAK,
-            _ => Token::NONCE,
+        let tok = match_char(char);
+        let next_tok = iter.peek_next();
+        let start = iter.get_index().unwrap();
+        if next_tok.is_none() {
+            stream.push(tok.span(start, start));
+            continue
+        }
+        let next_tok = next_tok.unwrap();
+        let next_tok = match_char(next_tok);
+        let mut push_t = |tok: Token| {
+            iter.next();
+            stream.push(tok.span(start, start + 1))
         };
+
+        if tok == Token::PIPE && next_tok == Token::PIPE {
+            push_t(Token::OR);
+            continue
+        }
+        if tok == Token::PIPE && next_tok == Token::ANGLE_RIGHT {
+            push_t(Token::PIPE_OP);
+            continue
+        }
+        if tok == Token::ANGLE_LEFT && next_tok == Token::ASSIGN {
+            push_t(Token::RIGHT_GTE);
+            continue
+        }
+        if tok == Token::ANGLE_RIGHT && next_tok == Token::ASSIGN {
+            push_t(Token::LEFT_GTE);
+            continue
+        }
+        if tok == Token::ASSIGN && next_tok == Token::ASSIGN {
+            push_t(Token::EQ);
+            continue
+        }
+        if tok == Token::EXCL_MARK && next_tok == Token::ASSIGN {
+            push_t(Token::N_EQ);
+            continue
+        }
+        if tok == Token::MUL && next_tok == Token::ASSIGN {
+            push_t(Token::ASSIGN_MUL);
+            continue
+        }
+        if tok == Token::SUM && next_tok == Token::ASSIGN {
+            push_t(Token::ASSIGN_SUM);
+            continue
+        }
+        if tok == Token::DIV && next_tok == Token::ASSIGN {
+            push_t(Token::ASSIGN_DIV);
+            continue
+        }
+        if tok == Token::MOD && next_tok == Token::ASSIGN {
+            push_t(Token::ASSIGN_MOD);
+            continue
+        }
+        if tok == Token::SUBTRACT && next_tok == Token::ASSIGN {
+            push_t(Token::ASSIGN_SUB);
+            continue
+        }
+        if tok == Token::COLON && next_tok == Token::COLON {
+            push_t(Token::DOUBLE_COLON);
+            continue
+        }
+        if tok == Token::BIT_AND && next_tok == Token::BIT_AND {
+            push_t(Token::AND);
+            continue
+        }
+        if tok == Token::ANGLE_LEFT && next_tok == Token::ANGLE_LEFT {
+            push_t(Token::BIT_ZERO_FILL_LEFT_SHIFT);
+            continue
+        }
+        if tok == Token::ANGLE_RIGHT && next_tok == Token::ANGLE_RIGHT {
+            push_t(Token::BIT_S_RIGHT_SHIFT);
+            continue
+        }
+        if tok == Token::ANGLE_LEFT && next_tok == Token::ANGLE_LEFT && iter.peek_n(2).map_or(false, |x| x == '>') {
+            stream.push(Token::BIT_ZERO_FILL_RIGHT_SHIFT.span(start, start + 2));
+            continue
+        }
+        if tok != Token::NONCE {
+            stream.push(tok.span(start, start));
+            continue
+        }
+        reporter.add(WjlError::char(start).message(format!("Unexpected character: {}", char)).ok());
     }
     stream
 }
@@ -463,5 +566,123 @@ trait IsValidIdentStart {
 impl IsValidIdentStart for char {
     fn is_valid_ident_start(&self) -> bool {
         self.is_alphabetic() || self == &'_' || self == &'`'
+    }
+}
+
+impl Print for Vec<Span> {
+    fn print(&self) -> String {
+        let mut ret = String::new();
+        for tok in self {
+            let token = tok.get_token();
+            let str = match token {
+                Token::ANGLE_LEFT => "<".bright_yellow(),
+                Token::ANGLE_RIGHT => ">".bright_yellow(),
+                Token::BRACE_LEFT => "{".bright_yellow(),
+                Token::BRACE_RIGHT => "}".bright_yellow(),
+                Token::PAREN_LEFT => "(".bright_yellow(),
+                Token::PAREN_RIGHT => ")".bright_yellow(),
+                Token::BRACKET_LEFT => "[".bright_yellow(),
+                Token::BRACKET_RIGHT => "]".bright_yellow(),
+                Token::LEFT_GTE => ">=".green(),
+                Token::RIGHT_GTE => "<=".green(),
+                Token::EQ => "==".green(),
+                Token::N_EQ => "!=".green(),
+                Token::COLON => ":".green(),
+                Token::SUBTRACT => "-".green(),
+                Token::SUM => "+".green(),
+                Token::MUL => "*".green(),
+                Token::DIV => "/".green(),
+                Token::MOD => "%".green(),
+                Token::BIT_AND => "&".green(),
+                Token::AND => "&&".green(),
+                Token::OR => "||".green(),
+                Token::BIT_XOR => "^".green(),
+                Token::BIT_NOT => "~".green(),
+                Token::BIT_ZERO_FILL_LEFT_SHIFT => "<<".green(),
+                Token::BIT_S_RIGHT_SHIFT => ">>".green(),
+                Token::BIT_ZERO_FILL_RIGHT_SHIFT => ">>>".green(),
+                Token::HASH => "#".green(),
+                Token::AT => "@".green(),
+                Token::QMARK => "?".green(),
+                Token::EXCL_MARK => "!".green(),
+                Token::BACKSLASH => "\\".green(),
+                Token::COMMA => ",".green(),
+                Token::SEMI_COLON => ";".red(),
+                Token::LINE_BREAK => "\n".into(),
+                Token::PIPE => "|".green(),
+                Token::PERIOD => ".".green(),
+                Token::DOUBLE_COLON => "::".green(),
+                Token::KEYWORD_VAR => "var".blue(),
+                Token::KEYWORD_VAL => "val".blue(),
+                Token::KEYWORD_CONST => "const".blue(),
+                Token::MOD_KEYWORD_ONCE => "once".blue(),
+                Token::MOD_KEYWORD_PUBLIC => "public".blue(),
+                Token::MOD_KEYWORD_PROTECTED => "protected".blue(),
+                Token::MOD_KEYWORD_INTERNAL => "internal".blue(),
+                Token::KEYWORD_FUNC => "func".blue(),
+                Token::KEYWORD_CLASS => "class".blue(),
+                Token::KEYWORD_IMPL => "impl".blue(),
+                Token::KEYWORD_FOR => "for".blue(),
+                Token::KEYWORD_RETURN => "return".blue(),
+                Token::KEYWORD_BREAK => "break".blue(),
+                Token::KEYWORD_CONTINUE => "continue".blue(),
+                Token::KEYWORD_STRUCT => "struct".blue(),
+                Token::KEYWORD_AWAIT => "await".blue(),
+                Token::KEYWORD_IN => "in".blue(),
+                Token::KEYWORD_WHILE => "while".blue(),
+                Token::KEYWORD_MATCH => "match".blue(),
+                Token::KEYWORD_ENUM => "enum".blue(),
+                Token::KEYWORD_TRY => "try".blue(),
+                Token::KEYWORD_CATCH => "catch".blue(),
+                Token::KEYWORD_THIS => "this".red(),
+                Token::KEYWORD_TYPE => "type".blue(),
+                Token::KEYWORD_CONSTRUCTOR => "constructor".red(),
+                Token::KEYWORD_CLASSDEF => "clasdef".blue(),
+                Token::KEYWORD_FUNCDEF => "funcdef".blue(),
+                Token::KEYWORD_USE => "use".blue(),
+                Token::KEYWORD_EXT => "external".blue(),
+                Token::KEYWORD_OPERATOR => "operator".blue(),
+                Token::KEYWORD_DECORATOR => "decorator".blue(),
+                Token::KEYWORD_REFLECT => "reflect".blue(),
+                Token::KEYWORD_INTERFACE => "interface".blue(),
+                Token::KEYWORD_IF => "if".blue(),
+                Token::KEYWORD_ELSE => "else".blue(),
+                Token::KEYWORD_ELSE_IF => "else if".blue(),
+                Token::KEYWORD_YIELD => "yield".blue(),
+                Token::OP_SPREAD => "...".red(),
+                Token::IDENT(kind) => match kind {
+                    IdentKind::DEFAULT(content) => format!("[IDENT_DEFAULT: {}]", content).red(),
+                    IdentKind::BACKTICK(content) => format!("[IDENT_BACKTICK: {}]", content).red()
+                },
+                Token::ASSIGN => "=".green(),
+                Token::ASSIGN_SUM => "+=".green(),
+                Token::ASSIGN_DIV => "/=".green(),
+                Token::ASSIGN_MOD => "%=".green(),
+                Token::ASSIGN_MUL => "*=".green(),
+                Token::ASSIGN_SUB => "-=".green(),
+                Token::INCR => "++".green(),
+                Token::DECR => "--".green(),
+                Token::PWR => "**".green(),
+                Token::ARROW => "=>".green(),
+                LITERAL_DOUBLE(_) => "<double quote literal>".red(),
+                LITERAL_SINGLE(_) => "<single quote literal>".red(),
+                Token::OP_FUNC_SUM => "sum".green(),
+                Token::OP_FUNC_DIV => "div".green(),
+                Token::OP_FUNC_MOD => "mod".green(),
+                Token::OP_FUNC_SUB => "sub".green(),
+                Token::WJL_COMPILER_PLACEHOLDER => "@@wjl_internal".black(),
+                Token::DELIMITER => ";".green(),
+                Token::WHITESPACE => " ".into(),
+                Token::PIPE_OP => "|>".yellow(),
+                Token::FLOAT(f) => format!("[float: {}]", f).red(),
+                Token::INT(int, bigint) => format!("[int: {}, is_bigint: {}]", int, bigint).red(),
+                Token::BINARY_NUMBER(int, bigint) => format!("[binary: {}, is_bigint: {}]", int, bigint).red(),
+                Token::OCTAL_NUMBER(int, bigint) => format!("[octal: {}, is_bigint: {}]", int, bigint).red(),
+                Token::HEX_NUMBER(int, bigint) => format!("[hex: {}, is_bigint: {}]", int, bigint).red(),
+                Token::NONCE => "<<NONCE>>".black()
+            };
+            ret.write_str(&*str).expect("Failed to write char to stream");
+        }
+        ret
     }
 }

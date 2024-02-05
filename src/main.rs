@@ -1,4 +1,5 @@
 use crate::errors::ErrorReporter;
+use crate::helpers::Print;
 use crate::lexer::lex_stream;
 
 mod errors;
@@ -13,5 +14,6 @@ fn main() {
     let mut reporter = ErrorReporter::for_file("str_val.wjl".to_string(), &baseline_dep);
     let stream = lex_stream(&baseline_dep, &mut reporter);
     dbg!(reporter);
-    dbg!(stream);
+   // dbg!(stream);
+    println!("{}", stream.print());
 }
