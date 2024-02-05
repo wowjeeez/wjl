@@ -1,4 +1,5 @@
 use crate::errors::{ErrorReporter, WjlError};
+use crate::helpers::treat_as_bigint;
 use crate::iter::{wrap_iter, GenericIterator, PeekableIterator};
 use crate::tokens::span::Span;
 use crate::tokens::Token::{LITERAL_DOUBLE, LITERAL_SINGLE};
@@ -199,11 +200,15 @@ impl PeekableIterator<char> {
             } else {
                 let res = buf.parse::<i64>();
                 if res.is_err() {
-                    reporter.add(WjlError::char(start)
+                    if treat_as_bigint(buf, 10) {
+                        stream.push(Token::INT(res.unwrap()).span(start, end));
+                    } else {
+                            reporter.add(WjlError::char(start)
                         .set_end_char(end)
                         .cause(res.err().unwrap().to_string())
                         .message("Failed to parse integer, this is very likely due to the fact that the number is not inside the 64 bit signed integer range.").ok());
                     return
+                    }
                 }
                 stream.push(Token::INT(res.unwrap()).span(start, end));
             }
@@ -270,9 +275,70 @@ impl PeekableIterator<char> {
         }
     }
 
-    pub fn parse_octal_number(&mut self, stream: &mut Vec<Span>, reporter: &mut ErrorReporter) {}
+    pub fn parse_octal_number(&mut self, stream: &mut Vec<Span>, reporter: &mut ErrorReporter) {
+        let mut buf = String::new();
+        let start = self.get_index().unwrap();
+        let is_negative = self.peek_prev().map_or(false, |x| x == '-');
+        if is_negative {
+            buf.write_char('-').expect("Failed to write char to buf");
+        }
+        self.next(); //drop the b
+        while let Some(char) = self.next() {
+            if char.is_digit(8) {
+                buf.write_char(char).expect("Failed to write char to buf");
+                continue;
+            } else if char.is_digit(10) {
+                reporter.add(
+                    WjlError::char(self.get_index().unwrap())
+                        .message(
+                            "Invalid octal number. Only numbers 0-7 are allowed in octal numbers.",
+                        )
+                        .ok(),
+                );
+                return;
+            }
+            self.seek(-1);
+            break;
+        }
+        // buf.parse fails here since it assumes a 10 based radix
+        let i64_res = i64::from_str_radix(&*buf, 8);
+        if i64_res.is_err() {
+            reporter.add(WjlError::char(start)
+                .set_end_char(self.get_index().unwrap())
+                .cause(i64_res.err().unwrap().to_string())
+                .message("Failed to parse octal integer, this is very likely due to the fact that the number is not inside the 64 bit signed integer range.").ok());
+            return;
+        }
+        stream.push(Token::OCTAL_NUMBER(buf).span(start, self.get_index().unwrap()));
+    }
 
-    pub fn parse_hex_number(&mut self, stream: &mut Vec<Span>, reporter: &mut ErrorReporter) {}
+    pub fn parse_hex_number(&mut self, stream: &mut Vec<Span>, reporter: &mut ErrorReporter) {
+        let mut buf = String::new();
+        let start = self.get_index().unwrap();
+        let is_negative = self.peek_prev().map_or(false, |x| x == '-');
+        if is_negative {
+            buf.write_char('-').expect("Failed to write char to buf");
+        }
+        self.next(); //drop the b
+        while let Some(char) = self.next() {
+            if char.is_digit(16) {
+                buf.write_char(char).expect("Failed to write char to buf");
+                continue;
+            }
+            self.seek(-1);
+            break;
+        }
+        // buf.parse fails here since it assumes a 10 based radix
+        let i64_res = i64::from_str_radix(&*buf, 16);
+        if i64_res.is_err() {
+            reporter.add(WjlError::char(start)
+                .set_end_char(self.get_index().unwrap())
+                .cause(i64_res.err().unwrap().to_string())
+                .message("Failed to parse hex integer, this is very likely due to the fact that the number is not inside the 64 bit signed integer range.").ok());
+            return;
+        }
+        stream.push(Token::HEX_NUMBER(buf).span(start, self.get_index().unwrap()));
+    }
 
     pub fn parse_exp_number(&mut self, stream: &mut Vec<Span>, reporter: &mut ErrorReporter) {}
 
@@ -285,11 +351,10 @@ impl PeekableIterator<char> {
         }
         self.next(); //drop the b
         while let Some(char) = self.next() {
-            if ['0', '1'].contains(&char) {
+            if char.is_digit(2) {
                 buf.write_char(char).expect("Failed to write char to buf");
                 continue;
-            }
-            if char.is_digit(10) {
+            } else if char.is_digit(10) {
                 reporter.add(
                     WjlError::char(self.get_index().unwrap())
                         .message(
@@ -303,7 +368,6 @@ impl PeekableIterator<char> {
             break;
         }
         // buf.parse fails here since it assumes a 10 based radix
-
         let i64_res = i64::from_str_radix(&*buf, 2);
         if i64_res.is_err() {
             reporter.add(WjlError::char(start)
