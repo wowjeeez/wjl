@@ -8,6 +8,7 @@ mod lexer;
 mod tokens;
 #[macro_use]
 mod helpers;
+mod ast;
 
 fn main() {
     let baseline_dep = include_str!("../baselines/str_val.wjl").to_string();

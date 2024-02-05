@@ -1,12 +1,13 @@
 use crate::errors::{ErrorReporter, WjlError};
 use crate::helpers::{Print, treat_as_bigint};
 use crate::iter::{wrap_iter, GenericIterator, PeekableIterator};
-use crate::tokens::span::Span;
+use crate::tokens::span::Span as GenericSpan;
 use crate::tokens::Token::{LITERAL_DOUBLE, LITERAL_SINGLE};
 use crate::tokens::{IdentKind, Token};
 use either::Either;
 use std::fmt::Write;
 use colored::Colorize;
+type Span = GenericSpan<Token>;
 
 impl PeekableIterator<char> {
     pub fn pull_literal(&mut self, matcher: char, reporter: &mut ErrorReporter) -> String {
@@ -436,9 +437,9 @@ pub fn lex_stream(input: &String, reporter: &mut ErrorReporter) -> Vec<Span> {
         let last_token = stream.last();
         if last_token.is_some() {
             let last_token = last_token.unwrap().clone();
-            if last_token.get_token() == Token::KEYWORD_IF {
+            if last_token.get_inner() == Token::KEYWORD_IF {
                 let token = stream.get(stream.len() - 2).unwrap();
-                if token.get_token() == Token::KEYWORD_ELSE {
+                if token.get_inner() == Token::KEYWORD_ELSE {
                     let start = token.start;
                     let end = last_token.end;
                     stream.pop();
@@ -592,7 +593,7 @@ impl IsValidIdentStart for char {
 impl Print for Vec<Span> {
     fn print(&self) {
         for tok in self {
-            let token = tok.get_token();
+            let token = tok.get_inner();
             let str = match token {
                 Token::ANGLE_LEFT => "<".bright_yellow(),
                 Token::ANGLE_RIGHT => ">".bright_yellow(),
