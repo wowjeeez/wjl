@@ -101,6 +101,7 @@ impl PeekableIterator<char> {
             "protected" => Token::MOD_KEYWORD_PROTECTED,
             "enum" => Token::KEYWORD_ENUM,
             "internal" => Token::MOD_KEYWORD_INTERNAL,
+            "private" => Token::MOD_KEYWORD_PRIVATE,
             "func" => Token::KEYWORD_FUNC,
             "class" => Token::KEYWORD_CLASS,
             "impl" => Token::KEYWORD_IMPL,
@@ -758,6 +759,7 @@ impl Span {
             Token::COMMENT(inner) => format!("[comment: {}]", inner).red(),
             Token::COMMENT_ML(inner) => format!("[ml_comment: {:?}]", inner).red(),
             Token::KEYWORD_AS => "as".blue(),
+            Token::MOD_KEYWORD_PRIVATE => "private".blue()
         }
     }
 }

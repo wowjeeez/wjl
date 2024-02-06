@@ -44,4 +44,21 @@ impl<T: Clone + Debug> Span<T> {
     pub fn get_inner(&self) -> T {
         self.inner.clone()
     }
+    pub fn wrap(start: usize, end: usize, with: T) -> Span<T> {
+        Span {
+            inner: with,
+            start,
+            end
+        }
+    }
+}
+pub trait IntoSpan<T: Clone + Debug> {
+    fn to_span(&self, start: usize, end: usize) -> Span<T>;
+}
+
+impl <T> IntoSpan<T> for T
+where T: Clone + Debug {
+    fn to_span(&self, start: usize, end: usize) -> Span<T> {
+        Span::wrap(start, end, self.clone())
+    }
 }

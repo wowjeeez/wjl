@@ -1,5 +1,5 @@
-use std::sync::Arc;
-use crate::ast::ast::Ast;
+use crate::ast::ast::{Span};
+use crate::tokens::span::Span as TSpan;
 
 #[derive(Clone, Debug)]
 #[allow(non_camel_case_types, unused)]
@@ -25,30 +25,47 @@ pub enum AssignmentKind {
 pub struct NamedRef {
     pub(crate) is_object_destruct: bool,
     pub(crate) is_array_destruct: bool,
-    pub(crate) entries: Option<Vec<DestructuringEntry>>,
+    pub(crate) entries: Option<Vec<TSpan<DestructuringEntry>>>,
     pub(crate) string_name: Option<String>,
     pub(crate) is_btick: Option<bool>
 }
 #[derive(Clone, Debug)]
 pub struct DestructuringEntry {
-    pub(crate) name: NamedRef,
-    pub(crate) default_value: Option<Vec<Ast>>,
-    pub(crate) binding: Option<NamedRef>,
+    pub(crate) name: TSpan<NamedRef>,
+    pub(crate) default_value: Option<Vec<Span>>,
+    pub(crate) binding: Option<TSpan<NamedRef>>,
     pub(crate) is_rest: bool
+}
+
+#[derive(Clone, Debug)]
+pub enum VisibilityScope {
+    PRIVATE,
+    PROTECTED,
+    INTERNAL,
+    PUBLIC
 }
 
 
 #[derive(Clone, Debug)]
 pub struct VariableDeclaration {
-    name: NamedRef,
-    is_backtick_name: String,
-    kind: VarDeclKind,
-    initializer: Box<Ast>
+    name: TSpan<NamedRef>,
+    is_backtick_name: Option<bool>,
+    kind: TSpan<VarDeclKind>,
+    type_hint: Option<Box<Span>>,
+    initializer: Box<Span>,
+    scoping: TSpan<VisibilityScope>
 }
 
 #[derive(Clone, Debug)]
 pub struct Assignment {
     to: String,
     kind: AssignmentKind,
-    value: Box<Ast> //len 0 if AssignmentKind incr or decr
+    value: Box<Span> //len 0 if AssignmentKind incr or decr
+}
+
+
+#[derive(Clone, Debug)]
+pub struct ModifiersAndDecorators {
+    pub(crate) is_once: bool,
+    pub(crate) visibility: VisibilityScope,
 }
