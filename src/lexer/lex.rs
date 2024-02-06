@@ -604,8 +604,20 @@ pub fn lex_stream(input: &String, reporter: &mut ErrorReporter) -> Vec<Span> {
         }
 
         if tok == Token::ANGLE_LEFT && next_tok == Token::ANGLE_LEFT && iter.peek_n(2).map_or(false, |x| x == '>') {
+            iter.next();
+            iter.next(); //drop last >
             stream.push(Token::BIT_ZERO_FILL_RIGHT_SHIFT.span(start, start + 2));
             continue
+        }
+        if tok == Token::AT && next_tok == Token::AT && iter.peek_n(2).map_or(false, |x| x.is_valid_ident_start() && x != '`') {
+            iter.next(); //drop second @
+            iter.next(); //cycle to ident start
+            let ident = iter.pull_ident();
+            if ident == "wjl_internal".to_string() {
+                stream.push(Token::WJL_COMPILER_PLACEHOLDER.span(start, iter.get_index().unwrap()));
+                continue
+            }
+            iter.seek(-2);
         }
 
 
@@ -744,7 +756,8 @@ impl Span {
             Token::HEX_NUMBER(int, bigint) => format!("[hex: {}, is_bigint: {}]", int, bigint).red(),
             Token::NONCE => "<<NONCE>>".black(),
             Token::COMMENT(inner) => format!("[comment: {}]", inner).red(),
-            Token::COMMENT_ML(inner) => format!("[ml_comment: {:?}]", inner).red()
+            Token::COMMENT_ML(inner) => format!("[ml_comment: {:?}]", inner).red(),
+            Token::KEYWORD_AS => "as".blue(),
         }
     }
 }

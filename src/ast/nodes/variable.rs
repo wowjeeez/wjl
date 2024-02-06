@@ -33,7 +33,7 @@ pub struct NamedRef {
 pub struct DestructuringEntry {
     pub(crate) name: NamedRef,
     pub(crate) default_value: Option<Vec<Ast>>,
-    pub(crate) alias: Option<NamedRef>,
+    pub(crate) binding: Option<NamedRef>,
     pub(crate) is_rest: bool
 }
 

@@ -7,6 +7,22 @@ pub enum IdentKind {
     BACKTICK(String),
 }
 
+impl IdentKind {
+    pub fn get_text(&self) -> String {
+        match self {
+            IdentKind::DEFAULT(i) => i.clone(),
+            IdentKind::BACKTICK(i) => i.clone()
+        }
+    }
+
+    pub fn is_btick(&self) -> bool {
+        match self {
+            IdentKind::DEFAULT(_) => false,
+            IdentKind::BACKTICK(_) => true,
+        }
+    }
+}
+
 pub type Literal = Vec<Either<String, Vec<Token>>>;
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[allow(non_camel_case_types, unused)]
