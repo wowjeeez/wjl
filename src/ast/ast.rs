@@ -1,4 +1,5 @@
 use std::env::vars_os;
+use crate::ast::nodes::qualified_ident::{Connector, QualifiedIdent, QualifiedIdentPart};
 use crate::ast::nodes::variable::{Assignment, DestructuringEntry, ModifiersAndDecorators, NamedRef, VariableDeclaration, VisibilityScope};
 use crate::errors::{ErrorReporter, WjlError};
 use crate::iter::{GenericIterator, PeekableIterator, wrap_iter};
@@ -38,6 +39,18 @@ impl PeekableIterator<TokenSpan> {
         next
     }
 
+    pub fn seek_back_skip_ml_comment(&mut self) {
+        let prev = self.get_index().unwrap() - 1;
+        self.set_index(prev);
+        let curr = self.get_content().get(prev);
+        if curr.as_ref().map_or(false, |x| match x.get_inner() {
+            Token::COMMENT_ML(_) => true,
+            _ => false
+        }).eq(&true) {
+            return self.seek_back_skip_ml_comment();
+        }
+    }
+
     pub fn peek_prev_skip_ml_comment(&self) -> (Option<TokenSpan>, isize) {
         self.peek_n_skip_ml_comment(-1)
     }
@@ -72,8 +85,7 @@ impl PeekableIterator<TokenSpan> {
                 entries: Some(vec![]),
                 is_array_destruct: false,
                 is_object_destruct: true,
-                is_btick: None,
-                string_name: None
+                name: None
             }.to_span(start, first_tok.end))
         }
         if first_tok.get_inner() == Token::BRACKET_LEFT {
@@ -108,8 +120,7 @@ impl PeekableIterator<TokenSpan> {
                 is_object_destruct: true,
                 is_array_destruct: false,
                 entries: Some(entries),
-                string_name: None,
-                is_btick: None
+                name: None,
             }.to_span(start, self.curr().unwrap().end))
         }
 
@@ -133,8 +144,7 @@ impl PeekableIterator<TokenSpan> {
                 entries: Some(vec![]),
                 is_array_destruct: true,
                 is_object_destruct: false,
-                is_btick: None,
-                string_name: None
+                name: None
             }.to_span(start, first_tok.end))
         }
         if first_tok.get_inner().is_ident() || first_tok.get_inner() == Token::OP_SPREAD || first_tok.get_inner() == Token::BRACKET_LEFT {
@@ -162,8 +172,7 @@ impl PeekableIterator<TokenSpan> {
                 is_object_destruct: false,
                 is_array_destruct: true,
                 entries: Some(entries),
-                string_name: None,
-                is_btick: None
+                name: None,
             }.to_span(start, self.curr().unwrap().end))
         }
         reporter.add(WjlError::ast(first_tok.start).message("Unexpected token.").ok());
@@ -212,6 +221,7 @@ impl PeekableIterator<TokenSpan> {
             reporter.add(WjlError::ast(target.end).message("Expected identifier.").ok());
             return None;
         }
+        let inner = target.as_qualified();
         let (next, end) = self.peek_next_skip_ml_comment();
         if next.is_none() {
             // safe to cast to usize
@@ -221,15 +231,14 @@ impl PeekableIterator<TokenSpan> {
         }
         let next = next.unwrap();
         if next.get_inner() == Token::COMMA || next.get_inner() == if in_arr { Token::BRACKET_RIGHT } else { Token::BRACE_RIGHT } {
-            let (tx, is_b) = inner.get_ident_inner();
+            let parsed = self.parse_qualified_ident(reporter)?;
             return Some(DestructuringEntry {
                 is_rest: is_spread,
                 name: NamedRef {
                     is_object_destruct: false,
                     is_array_destruct: false,
                     entries: None,
-                    string_name: Some(tx),
-                    is_btick: Some(is_b),
+                    name: Some(parsed),
                 }.to_span(target.start, target.end),
                 default_value: None,
                 binding: None,
@@ -250,24 +259,21 @@ impl PeekableIterator<TokenSpan> {
                 return None
             }
             let alias_tok = alias_tok.unwrap();
-            let (tx, is_b) = inner.get_ident_inner();
             if alias_tok.get_inner().is_ident() {
-                let (ident, is_btick) = alias_tok.get_inner().get_ident_inner();
+                let ident = self.parse_qualified_ident(reporter)?;
                 return Some(DestructuringEntry {
                     binding: Some(NamedRef {
                         entries: None,
                         is_array_destruct: false,
                         is_object_destruct: false,
-                        is_btick: Some(is_btick),
-                        string_name: Some(ident)
+                        name: Some(ident)
                     }.to_span(alias_tok.start, alias_tok.end)),
                     is_rest: is_spread,
                     name: NamedRef {
                         entries: None,
                         is_array_destruct: false,
                         is_object_destruct: false,
-                        is_btick: Some(is_b),
-                        string_name: Some(tx)
+                        name: Some(inner)
                     }.to_span(target.start, target.end),
                     default_value: None
                 }.to_span(start, alias_tok.end))
@@ -282,8 +288,7 @@ impl PeekableIterator<TokenSpan> {
                         entries: None,
                         is_array_destruct: false,
                         is_object_destruct: false,
-                        is_btick: Some(is_b),
-                        string_name: Some(tx)
+                        name: Some(inner)
                     }.to_span(target.start, target.end),
                     default_value: None
                 }.to_span(start, end))
@@ -298,8 +303,7 @@ impl PeekableIterator<TokenSpan> {
                         entries: None,
                         is_array_destruct: false,
                         is_object_destruct: false,
-                        is_btick: Some(is_b),
-                        string_name: Some(tx)
+                        name: Some(inner)
                     }.to_span(target.start, target.end),
                     default_value: None
                 }.to_span(start, end))
@@ -376,6 +380,86 @@ impl PeekableIterator<TokenSpan> {
         }
 
     }
+
+    // expecting that we are on the first ident
+    pub fn parse_qualified_ident(&mut self, reporter: &mut ErrorReporter) -> Option<QualifiedIdent> {
+        let first_ident = self.curr().unwrap();
+        let next = self.peek_next_skip_ml_comment().0;
+        let (ident, is_bt) = first_ident.get_inner().get_ident_inner();
+        let ident = QualifiedIdentPart {
+            segment: ident,
+            is_btick: is_bt,
+            previous_link: None
+        }.to_span(first_ident.start, first_ident.end);
+        if next.is_none() {
+            return Some(vec![ident].to_span(first_ident.start, first_ident.end))
+        }
+        let mut contents = vec![ident];
+        let next = next.unwrap();
+        if next.get_inner() == Token::DOUBLE_COLON || next.get_inner() == Token::PERIOD {
+            while let Some(n) = self.next_skip_ml_comment() {
+                if n.get_inner().is_ident() {
+                    reporter.add(WjlError::ast(n.start).set_end_char(n.end)
+                        .message("Unexpected identifier")
+                        .pot_fix("Did you mean to add a . or ::?")
+                        .ok());
+                    return None
+                }
+                if ![Token::DOUBLE_COLON, Token::PERIOD].contains(&n.get_inner()) {
+                    self.seek_back_skip_ml_comment();
+                    break
+                }
+                let ident = self.next_skip_ml_comment();
+                if ident.is_none() {
+                    reporter.add(WjlError::ast(n.end).message("Expected identifier, got nothing.").ok());
+                    return None
+                }
+                let ident = ident.unwrap();
+                if !ident.get_inner().is_ident() {
+                    reporter.add(WjlError::ast(ident.start).set_end_char(ident.end).message(format!("Expected identifier, got {}", ident.to_colored_str())).ok());
+                    return None
+                }
+                let (txt, is_btick) = ident.get_inner().get_ident_inner();
+                let ident = QualifiedIdentPart {
+                    segment: txt,
+                    is_btick,
+                    previous_link: Some(match n.get_inner() {
+                        Token::DOUBLE_COLON => Connector::D_COL,
+                        Token::PERIOD => Connector::PERIOD,
+                        _ => unreachable!()
+                    })
+                }.to_span(n.start, ident.end);
+                contents.push(ident);
+            }
+            return Some(contents.to_span(first_ident.start, contents.last().unwrap().end))
+        }
+
+
+        return Some(contents.to_span(first_ident.start, first_ident.end))
+    }
+
+    //assuming that we are on the opening <
+    pub fn parse_generic_argument(&mut self) {
+        
+    }
+
+    // expecting that we are on the colon
+    pub fn parse_type_annotation(&mut self, reporter: &mut ErrorReporter) {
+        let start = self.curr().unwrap().start;
+        let ident_or_paren = self.next_skip_ml_comment();
+        if ident_or_paren.is_none() {
+            reporter.add(WjlError::ast(start).message("Expected type annotation, got nothing.").ok());
+            return None
+        }
+        let ident_or_paren = ident_or_paren.unwrap();
+        if ident_or_paren.get_inner().is_ident() {
+            let qualified_type = self.parse_qualified_ident(reporter)?;
+
+
+        }
+
+        return None
+    }
 }
 
 impl ToAst for Vec<TokenSpan> {
@@ -396,9 +480,12 @@ impl ToAst for Vec<TokenSpan> {
                 let next = next.unwrap();
 
                 let var_name = if let Token::IDENT(ident) = next.get_inner() {
+                    let parsed = iter.parse_qualified_ident(reporter);
+                    if parsed.is_none() {
+                        break
+                    }
                     TSpan::wrap(0, 0, NamedRef {
-                        is_btick: Some(ident.is_btick()),
-                        string_name: Some(ident.get_text()),
+                        name: Some(parsed.unwrap()),
                         is_array_destruct: false,
                         is_object_destruct: false,
                         entries: None,
@@ -427,6 +514,7 @@ impl ToAst for Vec<TokenSpan> {
                 let next = next.unwrap();
                 let needs_init = tok == KEYWORD_CONST || (tok == KEYWORD_VAL && !preceeding_data.is_once);
                 if next.get_inner() == Token::COLON {
+
                     //type hint
                 }
                 if next.get_inner() == Token::ASSIGN {

@@ -1,4 +1,5 @@
 use crate::ast::ast::{Span};
+use crate::ast::nodes::qualified_ident::QualifiedIdent;
 use crate::tokens::span::Span as TSpan;
 
 #[derive(Clone, Debug)]
@@ -26,8 +27,7 @@ pub struct NamedRef {
     pub(crate) is_object_destruct: bool,
     pub(crate) is_array_destruct: bool,
     pub(crate) entries: Option<Vec<TSpan<DestructuringEntry>>>,
-    pub(crate) string_name: Option<String>,
-    pub(crate) is_btick: Option<bool>
+    pub(crate) name: Option<QualifiedIdent>,
 }
 #[derive(Clone, Debug)]
 pub struct DestructuringEntry {

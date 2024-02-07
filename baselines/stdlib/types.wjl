@@ -3,3 +3,5 @@ public type StrictIntRange<S: int, E: int, Inclusive: bool = false> = @@wjl_inte
 
 // Will raise a compiler warning on arbitrary numbers, that aren't known at compile time
 public type LenientIntRange<S: int, E: int, Inclusive: bool = false> = @@wjl_internal
+
+public type Class<Def = Any> = @@wjl_internal
