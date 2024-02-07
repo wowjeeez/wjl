@@ -520,7 +520,11 @@ pub fn lex_stream(input: &String, reporter: &mut ErrorReporter) -> Vec<Span> {
             continue
         }
         let next_tok = next_tok.unwrap();
+        if tok == Token::COLON && next_tok == '3' {
+            println!("yorick my beloved (https://discord.com/channels/577993482761928734/1193960831424151552/1204858917956493364)");
+        }
         let next_tok = match_char(next_tok);
+
         let mut push_t = |tok: Token| {
             iter.next();
             stream.push(tok.span(start, start + 1))

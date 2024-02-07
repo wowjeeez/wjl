@@ -6,3 +6,4 @@ val hex = 0xFFFFFFFFFFFFFFFFF
 if x == 10 {} else if {}
 /* lmao*/
 x::lol.idx
+:3

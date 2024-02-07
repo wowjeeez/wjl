@@ -13,7 +13,7 @@ pub enum StaticExpr {
     OCT(String, bool),
     ARR(Vec<Expression>)
 }
-
+#[derive(Debug, Clone)]
 struct StringTemplate {
     raw: Vec<Option<String>>,
     expressions: Vec<Option<Expression>>

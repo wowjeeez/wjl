@@ -444,7 +444,7 @@ impl PeekableIterator<TokenSpan> {
     }
 
     // expecting that we are on the colon
-    pub fn parse_type_annotation(&mut self, reporter: &mut ErrorReporter) {
+    pub fn parse_type_annotation(&mut self, reporter: &mut ErrorReporter) -> Option<()> {
         let start = self.curr().unwrap().start;
         let ident_or_paren = self.next_skip_ml_comment();
         if ident_or_paren.is_none() {
