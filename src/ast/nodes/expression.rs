@@ -29,6 +29,8 @@ pub enum Expression {
     INCREMENT(QualifiedIdent),
     DECREMENT(QualifiedIdent),
     INVERT(Box<Expression>),
+    IDENT(QualifiedIdent),
+    TYPE_CONSTRAINT(Box<TypeConstraintExpr>),
     WJL_PLACEHOLDER
 }
 
@@ -59,7 +61,7 @@ pub struct ObjectLikeFieldDeclaration {
     pub name: String,
     pub is_optional: bool,
     pub default: Option<TSpan<Expression>>,
-    pub field_type: QualifiedIdent,
+    pub field_type: TSpan<Expression>,
     pub visibility: VisibilityScope //only public/private
 }
 
@@ -72,4 +74,21 @@ pub struct TernaryExpr {}
 #[derive(Clone, Debug)]
 pub struct ElvisExpr {
 
+}
+
+#[derive(Clone, Debug)]
+pub struct TypeConstraintExpr {
+    pub receiver: TSpan<Expression>,
+    pub constraints: Vec<TSpan<TypeConstraintExprPart>>
+}
+
+#[derive(Clone, Debug)]
+pub enum ConstraintExprJoin {
+    AND,
+    OR
+}
+#[derive(Clone, Debug)]
+pub struct TypeConstraintExprPart {
+    pub constraint: QualifiedIdent,
+    pub next_join: Option<ConstraintExprJoin>
 }

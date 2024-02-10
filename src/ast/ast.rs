@@ -1,5 +1,5 @@
 use either::Either;
-use crate::ast::nodes::expression::{Expression, ObjectLikeFieldDeclaration, StructDeclExpr, StructInitExpr};
+use crate::ast::nodes::expression::{ConstraintExprJoin, Expression, ObjectLikeFieldDeclaration, StructDeclExpr, StructInitExpr, TypeConstraintExpr, TypeConstraintExprPart};
 use crate::ast::nodes::qualified_ident::{Connector, GenericArgs, QualifiedIdent, QualifiedIdentPart};
 use crate::ast::nodes::statics::StaticExpr;
 use crate::ast::nodes::variable::{Assignment, DestructuringEntry, ModifiersAndDecorators, NamedRef, VariableDeclaration, VisibilityScope};
@@ -681,6 +681,138 @@ impl PeekableIterator<TokenSpan> {
         };
         return None
     }
+    // expecting we are before the annotation (on a colon in most cases)
+    // correct examples of typing:
+        // : 10
+        // : "wstri"
+        // : IntRange<a, b>
+        // : T : ToString ? 10 : 20
+        // : <Ident>
+        // : <Static>
+    pub fn parse_type_annotation(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<Expression>> {
+        let next = self.next_skip_ml_comment();
+        if next.is_none() {
+            reporter.add(WjlError::ast(self.peek_prev_skip_ml_comment().0.unwrap().end).message("Expected type annotation, got nothing.").ok());
+            return None
+        }
+        let next = next.unwrap();
+        let start_ix = next.start;
+        let start = if next.get_inner_ref().is_static() {
+            Expression::STATIC(next.get_inner().as_static_unchecked()).into_span(start_ix, next.end)
+        } else if next.get_inner_ref().is_ident() {
+            let ident = self.parse_qualified_ident(reporter, false)?;
+            let end = ident.end;
+            Expression::IDENT(ident).into_span(start_ix, end)
+        } else {
+            reporter.add(WjlError::ast(next.start).set_end_char(next.end).message("Expected identifier or static expression.").ok());
+            return None
+        };
+        let seek = self.get_index().unwrap();
+        let next = self.next_skip_ml_comment();
+        if next.is_none() {
+            return Some(start)
+        }
+        let next = next.unwrap();
+        if next.get_inner_ref() != &Token::COLON {
+            self.set_index(seek);
+            return Some(start)
+        }
+        let constraint = self.parse_constraint(reporter, start)?;
+
+        return None
+    }
+
+    // expecting that we are on the colon from where the constraint is expected
+    pub fn parse_constraint(&mut self, reporter: &mut ErrorReporter, left: TSpan<Expression>) -> Option<TSpan<TypeConstraintExpr>> {
+        let colon = self.curr().unwrap();
+        let next = self.next_skip_ml_comment();
+        if next.is_none() {
+            reporter.add(WjlError::ast(colon.end).message("Expected identifier, got nothing.").ok());
+            return None
+        }
+        let next = next.unwrap();
+        if !next.get_inner_ref().is_ident() {
+            reporter.add(WjlError::ast(next.start).set_end_char(next.end).message("Expected identifier.").ok());
+            return None
+        }
+        let first = self.parse_qualified_ident(reporter, false)?;
+        let (start, end) = (first.start, first.end);
+        let next = self.peek_next_skip_ml_comment().0;
+        if next.is_none() {
+            return Some(TypeConstraintExpr {
+                receiver: left,
+                constraints: vec![TypeConstraintExprPart {
+                    constraint: first,
+                    next_join: None
+                }.into_span(start, end)]
+            }.into_span(colon.start, end))
+        }
+        let next = next.unwrap();
+        if next.get_inner_ref() != Token::PIPE && next.get_inner_ref() != Token::SUM {
+            return Some(TypeConstraintExpr {
+                receiver: left,
+                constraints: vec![TypeConstraintExprPart {
+                    constraint: first,
+                    next_join: None
+                }.into_span(start, end)]
+            }.into_span(colon.start, end))
+        }
+        let to_constraint_op = |x: &Token| match x {
+            Token::SUM => ConstraintExprJoin::AND,
+            Token::PIPE => ConstraintExprJoin::OR,
+            _ => unreachable!()
+        };
+
+        let mut constraints = vec![TypeConstraintExprPart {
+            constraint: first,
+            next_join: Some(to_constraint_op(next.get_inner_ref()))
+        }.into_span(start, end)];
+
+        self.next_skip_ml_comment();
+        let mut o_end = 0;
+        while let next = self.next_skip_ml_comment() {
+            if next.is_none() {
+                reporter.add(WjlError::ast(constraints.pop().unwrap().end).message("Expected identifier, got nothing.").ok());
+                return None
+            }
+            let next = next.unwrap();
+            if !next.get_inner_ref().is_ident() {
+                reporter.add(WjlError::ast(next.start).set_end_char(next.end).message("Expected identifier.").ok());
+                return None
+            }
+            let constraint = self.parse_qualified_ident(reporter, false)?;
+            let next = self.peek_next_skip_ml_comment().0;
+            if next.is_none() || next.map_or(true, |x| x.get_inner_ref() != &Token::SUM && x.get_inner_ref() != Token::PIPE).eq(&true) {
+                let start = constraint.start;
+                let end = constraint.end;
+                o_end = end;
+                constraints.push(TypeConstraintExprPart {
+                    constraint,
+                    next_join: None
+                }.into_span(start, end));
+                break
+            }
+            let next = next.unwrap();
+            let end = next.end;
+            o_end = end;
+            constraints.push(TypeConstraintExprPart {
+                constraint,
+                next_join: Some(to_constraint_op(next.get_inner_ref()))
+            }.into_span(start, end));
+        }
+        let start = left.start;
+        return Some(TypeConstraintExpr {
+            receiver: left,
+            constraints
+        }.into_span(start, end));
+    }
+
+    // expecting that we are on the question mark
+    pub fn parse_ternary_expr(&mut self, condition: Expression) {
+
+    }
+
+
 
     pub fn parse_func_call(&mut self, reporter: &mut ErrorReporter) {
 
@@ -799,24 +931,13 @@ impl PeekableIterator<TokenSpan> {
                 qmark_or_colon = next.unwrap();
                 true
             } else {false};
-
             if qmark_or_colon.get_inner_ref() != Token::COLON {
                 reporter.add(WjlError::ast(qmark_or_colon.start).set_end_char(qmark_or_colon.end).message("Expected colon.").ok());
                 return None
             }
-            let next = self.next_skip_ml_comment();
-            if next.is_none() {
-                reporter.add(WjlError::ast(qmark_or_colon.end).message("Expected type, got nothing.").ok());
-                return None
-            }
-            let next = next.unwrap();
-            if !next.get_inner_ref().is_ident() {
-                reporter.add(WjlError::ast(next.start).set_end_char(next.end).message("Expected type").ok());
-                return None
-            }
-            end = next.end;
+            let field_type = self.parse_type_annotation(reporter)?;
+            end = field_type.end;
 
-            let field_type = self.parse_qualified_ident(reporter, false)?;
             let default = if self.next_skip_ml_comment().map_or(false, |x|x.get_inner_ref() == &Token::ASSIGN).eq(&true) {
                 let seek = self.get_index().unwrap();
                 let next = self.next_skip_ml_comment();
@@ -844,7 +965,7 @@ impl PeekableIterator<TokenSpan> {
             }
             let next = next.unwrap();
             if next.get_inner_ref() == Token::BRACE_RIGHT {
-                let end = next.end;
+                end = next.end;
                 break
             }
             if next.get_inner_ref() == Token::COMMA {
