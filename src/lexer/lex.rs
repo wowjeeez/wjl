@@ -116,7 +116,6 @@ impl PeekableIterator<char> {
             "match" => Token::KEYWORD_MATCH,
             "try" => Token::KEYWORD_TRY,
             "catch" => Token::KEYWORD_CATCH,
-            "this" => Token::KEYWORD_THIS,
             "type" => Token::KEYWORD_TYPE,
             "constructor" => Token::KEYWORD_CONSTRUCTOR,
             "classdef" => Token::KEYWORD_CLASSDEF,
@@ -131,6 +130,9 @@ impl PeekableIterator<char> {
             "else" => Token::KEYWORD_ELSE,
             "yield" => Token::KEYWORD_YIELD,
             "as" => Token::KEYWORD_AS,
+            "true" => Token::KEYWORD_TRUE,
+            "false" => Token::KEYWORD_FALSE,
+            "null" => Token::KEYWORD_NULL,
             _ => Token::NONCE,
         };
         return if keyword != Token::NONCE {
@@ -594,6 +596,10 @@ pub fn lex_stream(input: &String, reporter: &mut ErrorReporter) -> Vec<Span> {
             push_t(Token::ARROW);
             continue
         }
+        if tok == Token::COLON && next_tok == Token::QMARK {
+            push_t(Token::OP_ELVIS);
+            continue
+        }
 
         if tok == Token::PIPE && next_tok == Token::ANGLE_RIGHT {
             push_t(Token::PIPE_OP);
@@ -714,7 +720,6 @@ impl Span {
             Token::KEYWORD_ENUM => "enum".blue(),
             Token::KEYWORD_TRY => "try".blue(),
             Token::KEYWORD_CATCH => "catch".blue(),
-            Token::KEYWORD_THIS => "this".red(),
             Token::KEYWORD_TYPE => "type".blue(),
             Token::KEYWORD_CONSTRUCTOR => "constructor".red(),
             Token::KEYWORD_CLASSDEF => "clasdef".blue(),

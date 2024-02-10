@@ -38,6 +38,15 @@ impl Token {
             _ => unreachable!()
         }
     }
+
+    pub fn is_static(&self) -> bool {
+        match self  {
+            Token::LITERAL_SINGLE(_) | Token::LITERAL_DOUBLE(_) => true,
+            Token::HEX_NUMBER(_, _) | Token::BINARY_NUMBER(_, _) | Token::OCTAL_NUMBER(_, _) | Token::INT(_, _) | Token::FLOAT(_) => true,
+            Token::KEYWORD_TRUE | Token::KEYWORD_FALSE | Token::KEYWORD_NULL => true,
+            _ => false
+        }
+    }
 }
 
 impl<T: Clone + Debug> Span<T> {

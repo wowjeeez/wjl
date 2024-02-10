@@ -1,7 +1,10 @@
-use std::env::vars_os;
+use either::Either;
+use crate::ast::nodes::expression::Expression;
 use crate::ast::nodes::qualified_ident::{Connector, QualifiedIdent, QualifiedIdentPart};
+use crate::ast::nodes::statics::StaticExpr;
 use crate::ast::nodes::variable::{Assignment, DestructuringEntry, ModifiersAndDecorators, NamedRef, VariableDeclaration, VisibilityScope};
 use crate::errors::{ErrorReporter, WjlError};
+use crate::helpers::Triple;
 use crate::iter::{GenericIterator, PeekableIterator, wrap_iter};
 use crate::tokens::span::{IntoSpan, Span as TSpan};
 use crate::tokens::Token;
@@ -401,7 +404,7 @@ impl PeekableIterator<TokenSpan> {
                 if n.get_inner().is_ident() {
                     reporter.add(WjlError::ast(n.start).set_end_char(n.end)
                         .message("Unexpected identifier")
-                        .pot_fix("Did you mean to add a . or ::?")
+                        .pot_fix("Did you mean to add a ., :: or generic argument?")
                         .ok());
                     return None
                 }
@@ -420,6 +423,16 @@ impl PeekableIterator<TokenSpan> {
                     return None
                 }
                 let (txt, is_btick) = ident.get_inner().get_ident_inner();
+                let next = self.peek_next_skip_ml_comment().0;
+                if next.is_some() {
+                    let next = next.unwrap();
+                    if next.get_inner() == Token::ANGLE_LEFT {
+                        // WE MIGHT BE in a generic argument
+                        self.next_skip_ml_comment();
+                        let generic = self.parse_generic_argument(reporter);
+                    }
+                }
+
                 let ident = QualifiedIdentPart {
                     segment: txt,
                     is_btick,
@@ -439,8 +452,187 @@ impl PeekableIterator<TokenSpan> {
     }
 
     //assuming that we are on the opening <
-    pub fn parse_generic_argument(&mut self) {
-        
+    // Returns:
+    // Ok(Some()) - generic was correctly parsed
+    // Ok(None) - no generic
+    // Err(()) - failed to parse generic, but its supposed to be there
+    pub fn parse_generic_argument(&mut self, reporter: &mut ErrorReporter) -> Result<Option<()>, ()> {
+        let start_index = self.get_index().unwrap(); //we will rewind here if
+        let curr = self.curr().unwrap();
+        //DO NOT use peeking iterators
+        let next_token = self.next_skip_ml_comment();
+        if next_token.is_none() {
+            reporter.add(WjlError::ast(curr.end).message("Expected identifier, expression or value, got nothing.").ok());
+            return Err(())
+        }
+        let next_token = next_token.unwrap();
+        if !next_token.get_inner().is_ident() && !next_token.get_inner().is_static() && !next_token.get_inner() != Token::BRACKET_LEFT && !next_token.get_inner() != Token::KEYWORD_STRUCT {
+            return Ok(None)
+        }
+        // we might have a generic
+        // and we only accept a subset of generics here
+        let first_token = if next_token.get_inner().is_ident() {
+            let ident = self.parse_qualified_ident(reporter);
+            if ident.is_none() {
+                return Err(())
+            }
+            let ident = ident.unwrap();
+            Either::Left(ident)
+        } else if next_token.get_inner().is_static() {
+            let expr = next_token.get_inner().as_static_unchecked();
+            Either::Right(expr)
+        } else if next_token.get_inner() == Token::BRACKET_LEFT {
+
+        } else {
+            // struct keyword
+        };
+        return Ok(None)
+    }
+
+    // assuming we are on the [
+    pub fn parse_arr_expr(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<StaticExpr>> {
+        let start = self.curr().unwrap();
+        let next = self.peek_next_skip_ml_comment().0;
+        if next.is_none() {
+            reporter.add(WjlError::lex(start.end).message("Unmatched array literal").pot_fix("Did you forget the ]?").ok());
+            return None
+        }
+        let next = next.unwrap();
+        if next.get_inner() == Token::BRACKET_RIGHT {
+            return Some(StaticExpr::ARR(vec![]).to_span(start.start, next.end))
+        }
+        let expr = self.parse_expr(reporter)?;
+        let curr = self.curr().unwrap();
+        let next = self.next_skip_ml_comment();
+        if next.is_none() {
+            reporter.add(WjlError::lex(curr.end).message("Unmatched array literal").pot_fix("Did you forget the ]?").ok());
+            return None
+        }
+
+        let next = next.unwrap();
+        if next.get_inner() == Token::BRACKET_RIGHT {
+            return Some(StaticExpr::ARR(vec![expr]).to_span(start.start, next.end))
+        }
+        if next.get_inner() == Token::COMMA {
+            let mut exprs = vec![expr];
+            while let Some(tok) = self.next_skip_ml_comment() {
+                let expr = self.parse_expr(reporter)?;
+                exprs.push(expr);
+                let next = self.next_skip_ml_comment();
+                if next.is_none() {
+                    reporter.add(WjlError::lex(tok.end).message("Unexpected token. Expected comma or array literal closure (]), got nothing.").pot_fix("Did you forget the ]?").ok());
+                    return None
+                }
+                let next = next.unwrap();
+                if next.get_inner() == Token::COMMA {continue}
+                if next.get_inner() == Token::BRACKET_RIGHT {break}
+                reporter.add(WjlError::lex(next.start).message("Unexpected token. Expected comma or array literal closure (])").pot_fix("Did you forget the ]?").ok());
+                return None
+            }
+            return Some(StaticExpr::ARR(exprs).to_span(start.start, self.curr().unwrap().end))
+        }
+        reporter.add(WjlError::lex(next.end).message("Unexpected token. Expected comma or array literal closure (])").pot_fix("Did you forget the ]?").ok());
+        return None
+    }
+
+    // expecting that we are before the expr
+    // expression kinds that we be parsing here:
+    pub fn parse_expr(&mut self, reporter: &mut ErrorReporter) -> Option<Expression> {
+        let start = self.curr().unwrap();
+        let next = self.next();
+        if next.is_none() {
+            reporter.add(WjlError::ast(start.end).message("Expected expression, got nothing.").ok());
+            return None
+        }
+        let next = next.unwrap();
+
+        let first_part = if next.get_inner() == Token::PAREN_LEFT {
+            let wrapped = self.parse_expr(reporter)?;
+            Triple::A(Expression::GROUPED(Box::new(wrapped)))
+        } else if next.get_inner().is_ident() {
+            Triple::B(self.parse_qualified_ident(reporter)?)
+        }
+        else if next.get_inner() == Token::KEYWORD_AWAIT {
+            Triple::A(self.parse_await_expr(reporter)?)
+        } else if next.get_inner() == Token::KEYWORD_CLASS {
+            Triple::A(self.parse_class_decl(reporter, true)?)
+        } else if next.get_inner() == Token::KEYWORD_IF {
+            Triple::A(self.parse_if_expr_or_stmt(reporter, true)?)
+        } else if next.get_inner() == Token::WJL_COMPILER_PLACEHOLDER {
+            Triple::A(Expression::WJL_PLACEHOLDER)
+        } else if next.get_inner() == Token::OP_SPREAD {
+            Triple::A(self.parse_spread_expr(reporter)?)
+        } else if next.get_inner() == Token::KEYWORD_TRY {
+            Triple::A(self.parse_try_catch(reporter)?)
+        } else if next.get_inner() == Token::INCR {
+            Triple::A(self.parse_incr_or_decr(reporter, true)?)
+        } else if next.get_inner() == Token::DECR {
+            Triple::A(self.parse_incr_or_decr(reporter, false)?)
+        } else if next.get_inner() == Token::KEYWORD_FUNC {
+            Triple::A(self.parse_func_call(reporter)?)
+        } else {
+            Triple::C(next)
+        };
+
+
+
+
+
+
+        return None
+    }
+
+    pub fn parse_func_call(&mut self, reporter: &mut ErrorReporter) {
+
+    }
+
+    pub fn parse_incr_or_decr(&mut self, reporter: &mut ErrorReporter, is_incr: bool) {
+
+    }
+
+    pub fn parse_try_catch(&mut self, reporter: &mut ErrorReporter) {
+
+    }
+
+    pub fn parse_spread_expr(&mut self, reporter: &mut ErrorReporter) {
+
+    }
+
+    // expecting that we are on the await
+    pub fn parse_await_expr(&mut self, reporter: &mut ErrorReporter) {
+
+    }
+    // expecting that we are on the as kw
+    pub fn parse_typecast(&mut self, reporter: &mut ErrorReporter) {
+
+    }
+
+    // expecting that we are on the type name
+    pub fn parse_struct_init(&mut self, reporter: &mut ErrorReporter) {
+
+    }
+
+    // expecting that we are on the struct kw
+    pub fn parse_struct_decl(&mut self, reporter: &mut ErrorReporter) {
+
+    }
+
+    // expecting that we are on the enum kw
+    pub fn parse_enum_decl(&mut self, reporter: &mut ErrorReporter) {
+
+    }
+
+    // expecting that we are on the class kw
+    pub fn parse_class_decl(&mut self, reporter: &mut ErrorReporter, can_be_anon: bool) {
+
+    }
+
+    pub fn parse_if_expr_or_stmt(&mut self, reporter: &mut ErrorReporter, needs_catchall: bool) {
+
+    }
+
+    pub fn parse_yield_or_return(&mut self, reporter: &mut ErrorReporter) {
+
     }
 
     // expecting that we are on the colon
@@ -454,7 +646,6 @@ impl PeekableIterator<TokenSpan> {
         let ident_or_paren = ident_or_paren.unwrap();
         if ident_or_paren.get_inner().is_ident() {
             let qualified_type = self.parse_qualified_ident(reporter)?;
-
 
         }
 
