@@ -1,10 +1,11 @@
 use either::Either;
-use crate::ast::nodes::expression::Expression;
-use crate::ast::nodes::qualified_ident::{Connector, QualifiedIdent, QualifiedIdentPart};
+use crate::ast::nodes::expression::{Expression, StructExpr};
+use crate::ast::nodes::qualified_ident::{Connector, GenericArgs, QualifiedIdent, QualifiedIdentPart};
 use crate::ast::nodes::statics::StaticExpr;
 use crate::ast::nodes::variable::{Assignment, DestructuringEntry, ModifiersAndDecorators, NamedRef, VariableDeclaration, VisibilityScope};
 use crate::errors::{ErrorReporter, WjlError};
-use crate::helpers::Triple;
+use crate::helpers::{opt_to_broad_err, Triple};
+use crate::helpers::vec_utils::AsOption;
 use crate::iter::{GenericIterator, PeekableIterator, wrap_iter};
 use crate::tokens::span::{IntoSpan, Span as TSpan};
 use crate::tokens::Token;
@@ -315,7 +316,20 @@ impl PeekableIterator<TokenSpan> {
 
         if next.get_inner() == Token::ASSIGN {
             // default
-            todo!("Parse expr here")
+            let default = self.parse_expr(reporter)?;
+            let parsed = self.parse_qualified_ident(reporter)?;
+            return Some(DestructuringEntry {
+                is_rest: is_spread,
+                name: NamedRef {
+                    is_object_destruct: false,
+                    is_array_destruct: false,
+                    entries: None,
+                    name: Some(parsed),
+                }.to_span(target.start, target.end),
+                default_value: Some(default),
+                binding: None,
+            }.to_span(start, next.end));
+
         }
 
         reporter.add(WjlError::lex(next.start).message("Unexpected token").ok());
@@ -424,17 +438,50 @@ impl PeekableIterator<TokenSpan> {
                 }
                 let (txt, is_btick) = ident.get_inner().get_ident_inner();
                 let next = self.peek_next_skip_ml_comment().0;
+                let mut generic_args: GenericArgs = vec![];
+                let mut start_ix = 0;
+                let mut end_ix = 0;
                 if next.is_some() {
                     let next = next.unwrap();
+                    start_ix = next.start;
                     if next.get_inner() == Token::ANGLE_LEFT {
                         // WE MIGHT BE in a generic argument
                         self.next_skip_ml_comment();
-                        let generic = self.parse_generic_argument(reporter);
+                        let generic = self.parse_generic_argument(reporter, false);
+                        if generic.is_err() {
+                            return None
+                        }
+                        let generic = generic.unwrap();
+                        if generic.is_some() {
+                            let (generic_arg, was_comma) = generic.unwrap();
+                            let end = generic_arg.end;
+                            generic_args.push(generic_arg);
+                            if was_comma {
+                                'generic: while let next = self.next_skip_ml_comment() {
+                                    if next.is_none() {
+                                        reporter.add(WjlError::ast(end).message("Expected comma or closure, got nothing.").ok());
+                                        return None
+                                    }
+                                    let arg = self.parse_generic_argument(reporter, true);
+                                    if arg.is_err() {
+                                        return None
+                                    }
+                                    let (arg, was_comma) = arg.unwrap().unwrap();
+                                    generic_args.push(arg);
+                                    if was_comma {
+                                        continue
+                                    }
+                                    end_ix = self.curr().unwrap().end;
+                                    break 'generic
+                                }
+                            }
+                        }
                     }
                 }
 
                 let ident = QualifiedIdentPart {
                     segment: txt,
+                    generics: generic_args.to_option().map(|x: GenericArgs| x.into_span(start_ix, end_ix)),
                     is_btick,
                     previous_link: Some(match n.get_inner() {
                         Token::DOUBLE_COLON => Connector::D_COL,
@@ -451,13 +498,12 @@ impl PeekableIterator<TokenSpan> {
         return Some(contents.to_span(first_ident.start, first_ident.end))
     }
 
-    //assuming that we are on the opening <
+    //assuming that we are on the opening < or a comma
     // Returns:
     // Ok(Some()) - generic was correctly parsed
     // Ok(None) - no generic
     // Err(()) - failed to parse generic, but its supposed to be there
-    pub fn parse_generic_argument(&mut self, reporter: &mut ErrorReporter) -> Result<Option<()>, ()> {
-        let start_index = self.get_index().unwrap(); //we will rewind here if
+    pub fn parse_generic_argument(&mut self, reporter: &mut ErrorReporter, strict: bool) -> Result<Option<(TSpan<Expression>, bool)>, ()> {
         let curr = self.curr().unwrap();
         //DO NOT use peeking iterators
         let next_token = self.next_skip_ml_comment();
@@ -466,28 +512,40 @@ impl PeekableIterator<TokenSpan> {
             return Err(())
         }
         let next_token = next_token.unwrap();
-        if !next_token.get_inner().is_ident() && !next_token.get_inner().is_static() && !next_token.get_inner() != Token::BRACKET_LEFT && !next_token.get_inner() != Token::KEYWORD_STRUCT {
+        if !next_token.get_inner().is_ident()
+            && !next_token.get_inner().is_static()
+            && !next_token.get_inner() != Token::BRACKET_LEFT
+            && !next_token.get_inner() != Token::KEYWORD_STRUCT
+            && !next_token.get_inner() != Token::KEYWORD_CLASS
+        {
+            if strict {
+                reporter.add(WjlError::ast(next_token.start).message("Unexpected token in generic argument.").set_end_char(next_token.end).ok());
+                return Err(())
+            }
             return Ok(None)
         }
         // we might have a generic
-        // and we only accept a subset of generics here
-        let first_token = if next_token.get_inner().is_ident() {
-            let ident = self.parse_qualified_ident(reporter);
-            if ident.is_none() {
-                return Err(())
-            }
-            let ident = ident.unwrap();
-            Either::Left(ident)
-        } else if next_token.get_inner().is_static() {
-            let expr = next_token.get_inner().as_static_unchecked();
-            Either::Right(expr)
-        } else if next_token.get_inner() == Token::BRACKET_LEFT {
-
-        } else {
-            // struct keyword
-        };
+        // and we only accept a subset of expressions here
+        let arg = opt_to_broad_err(self.parse_expr(reporter))??;
+        let seek = self.get_index().unwrap();
+        let next = self.next_skip_ml_comment();
+        if next.is_none() {
+            reporter.add(WjlError::ast(curr.end).message("Expected comma, math operation or generic closure (`>`), got nothing.").ok());
+            return Err(())
+        }
+        let next = next.unwrap();
+        if next.get_inner() == Token::ANGLE_RIGHT || next.get_inner() == Token::COMMA { //100% generic as <IDENT> does not make sense
+            self.set_index(seek);
+            return Ok(Some((arg, next.get_inner() == Token::COMMA)))
+        }
+        if strict {
+            reporter.add(WjlError::ast(next_token.start).message("Unexpected token in generic argument.").set_end_char(next_token.end).ok());
+            return Err(())
+        }
+        //not a generic, discard the results TODO! save on parse time using symbol hashing and a cache (since we will obviously re-parse this expression later on if it aint a gen arg
         return Ok(None)
     }
+    //TODO! generic parse method synop: Vec<TokenSpan>::parse_until_um_brace_or_eof(&mut self, reporter: &mut ErrorReporter) -> Option<(Vec<Span>, bool)> where bool indicates if it was EOF or closed brace
 
     // assuming we are on the [
     pub fn parse_arr_expr(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<StaticExpr>> {
@@ -537,7 +595,7 @@ impl PeekableIterator<TokenSpan> {
 
     // expecting that we are before the expr
     // expression kinds that we be parsing here:
-    pub fn parse_expr(&mut self, reporter: &mut ErrorReporter) -> Option<Expression> {
+    pub fn parse_expr(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<Expression>> {
         let start = self.curr().unwrap();
         let next = self.next();
         if next.is_none() {
@@ -548,7 +606,7 @@ impl PeekableIterator<TokenSpan> {
 
         let first_part = if next.get_inner() == Token::PAREN_LEFT {
             let wrapped = self.parse_expr(reporter)?;
-            Triple::A(Expression::GROUPED(Box::new(wrapped)))
+            Triple::A(Expression::GROUPED(Box::new(wrapped.get_inner())))
         } else if next.get_inner().is_ident() {
             Triple::B(self.parse_qualified_ident(reporter)?)
         }
@@ -570,6 +628,8 @@ impl PeekableIterator<TokenSpan> {
             Triple::A(self.parse_incr_or_decr(reporter, false)?)
         } else if next.get_inner() == Token::KEYWORD_FUNC {
             Triple::A(self.parse_func_call(reporter)?)
+        } else if next.get_inner() == Token::BRACKET_LEFT {
+            Triple::A(self.parse_arr_expr(reporter)?)
         } else {
             Triple::C(next)
         };
@@ -608,7 +668,7 @@ impl PeekableIterator<TokenSpan> {
     }
 
     // expecting that we are on the type name
-    pub fn parse_struct_init(&mut self, reporter: &mut ErrorReporter) {
+    pub fn parse_struct_init(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<StructExpr>> {
 
     }
 

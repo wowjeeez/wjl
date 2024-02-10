@@ -1,4 +1,5 @@
 use crate::ast::ast::{Span};
+use crate::ast::nodes::expression::Expression;
 use crate::ast::nodes::qualified_ident::QualifiedIdent;
 use crate::tokens::span::Span as TSpan;
 
@@ -32,7 +33,7 @@ pub struct NamedRef {
 #[derive(Clone, Debug)]
 pub struct DestructuringEntry {
     pub(crate) name: TSpan<NamedRef>,
-    pub(crate) default_value: Option<Vec<Span>>,
+    pub(crate) default_value: Option<TSpan<Expression>>,
     pub(crate) binding: Option<TSpan<NamedRef>>,
     pub(crate) is_rest: bool
 }

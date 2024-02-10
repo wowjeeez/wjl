@@ -1,4 +1,5 @@
 use crate::ast::nodes::expression::Expression;
+use crate::tokens::span::Span;
 use crate::tokens::Token;
 
 #[derive(Clone, Debug)]
@@ -15,7 +16,7 @@ pub enum StaticExpr {
     EXP(String, bool),
     BIN(String, bool),
     OCT(String, bool),
-    ARR(Vec<Expression>)
+    ARR(Vec<Span<Expression>>)
 }
 #[derive(Debug, Clone)]
 struct StringTemplate {
