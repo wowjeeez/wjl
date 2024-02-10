@@ -406,7 +406,8 @@ impl PeekableIterator<TokenSpan> {
         let ident = QualifiedIdentPart {
             segment: ident,
             is_btick: is_bt,
-            previous_link: None
+            previous_link: None,
+            generics: None
         }.to_span(first_ident.start, first_ident.end);
         if next.is_none() {
             return Some(vec![ident].to_span(first_ident.start, first_ident.end))
