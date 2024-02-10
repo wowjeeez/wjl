@@ -718,6 +718,14 @@ impl PeekableIterator<TokenSpan> {
             return Some(start)
         }
         let constraint = self.parse_constraint(reporter, start)?;
+        let next = self.peek_next_skip_ml_comment().0;
+        let (start, end) = (constraint.start, constraint.end);
+        let constraint = Expression::TYPE_CONSTRAINT(Box::new(constraint.get_inner())).into_span(start, end);
+        if next.map_or(true, |x| x.get_inner_ref() != Token::QMARK).eq(&true) {
+            return Some(constraint)
+        }
+
+        let ternary = self.parse_ternary_expr(reporter, constraint)?;
 
         return None
     }
@@ -782,7 +790,7 @@ impl PeekableIterator<TokenSpan> {
             }
             let constraint = self.parse_qualified_ident(reporter, false)?;
             let next = self.peek_next_skip_ml_comment().0;
-            if next.is_none() || next.map_or(true, |x| x.get_inner_ref() != &Token::SUM && x.get_inner_ref() != Token::PIPE).eq(&true) {
+            if next.map_or(true, |x| x.get_inner_ref() != &Token::SUM && x.get_inner_ref() != Token::PIPE).eq(&true) {
                 let start = constraint.start;
                 let end = constraint.end;
                 o_end = end;
@@ -808,7 +816,7 @@ impl PeekableIterator<TokenSpan> {
     }
 
     // expecting that we are on the question mark
-    pub fn parse_ternary_expr(&mut self, condition: Expression) {
+    pub fn parse_ternary_expr(&mut self, reporter: &mut ErrorReporter, condition: TSpan<Expression>) {
 
     }
 
