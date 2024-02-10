@@ -16,8 +16,10 @@ pub type GenericArgs = Vec<Span<Expression>>;
 pub struct QualifiedIdentPart {
     pub(crate) segment: String,
     pub(crate) is_btick: bool,
-    pub(crate) generics: Option<Span<GenericArgs>>,
-    pub(crate) previous_link: Option<Connector>
+    pub(crate) generic_args: Option<Span<GenericArgs>>,
+    pub(crate) previous_link: Option<Connector>,
+    pub(crate) is_opt_chained_to_next: bool,
+    pub(crate) is_asserted_as_non_null: bool
 }
 pub type QualifiedIdent = Span<Vec<Span<QualifiedIdentPart>>>;
 
@@ -27,7 +29,7 @@ impl Span<Token> {
         let (content, is_b) = self.get_inner().get_ident_inner();
         vec![QualifiedIdentPart {
             segment: content,
-            generics: None,
+            generic_args: None,
             is_btick: is_b,
             previous_link: None
         }.to_span(self.start, self.end)].to_span(self.start, self.end)
@@ -36,7 +38,7 @@ impl Span<Token> {
 
 impl QualifiedIdent {
     pub fn is_single(&self) -> bool {
-        self.get_inner_ref().len() == 1 && self.get_inner_ref().first().unwrap().get_inner_ref().generics.is_none()
+        self.get_inner_ref().len() == 1 && self.get_inner_ref().first().unwrap().get_inner_ref().generic_args.is_none()
     }
     pub fn is_single_allow_gen(&self) -> bool {
         self.get_inner_ref().len() == 1

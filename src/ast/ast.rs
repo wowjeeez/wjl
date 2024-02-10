@@ -407,13 +407,35 @@ impl PeekableIterator<TokenSpan> {
             segment: ident,
             is_btick: is_bt,
             previous_link: None,
-            generics: None
+            generic_args: None,
+            is_opt_chained_to_next: false,
+            is_asserted_as_non_null: false
         }.to_span(first_ident.start, first_ident.end);
         if next.is_none() {
             return Some(vec![ident].to_span(first_ident.start, first_ident.end))
         }
         let mut contents = vec![ident];
-        let next = next.unwrap();
+        let mut next = next.unwrap();
+        if next.get_inner_ref() == &Token::QMARK || next.get_inner_ref() == &Token::EXCL_MARK {
+            let new = contents.pop().unwrap();
+            let inner = new.get_inner();
+            let first = QualifiedIdentPart {
+                is_opt_chained_to_next: next.get_inner_ref() == &Token::QMARK,
+                is_asserted_as_non_null: next.get_inner_ref() == &Token::EXCL_MARK,
+                generic_args: inner.generic_args,
+                segment: inner.segment,
+                is_btick: inner.is_btick,
+                previous_link: inner.previous_link
+            }.to_span(new.start, next.end);
+            contents = vec![first];
+            let next_inner = self.next_skip_ml_comment();
+            if next_inner.is_none() {
+                return Some(contents.to_span(first_ident.start, next.end));
+            }
+            let next_inner = next_inner.unwrap();
+            next = next_inner;
+        }
+
         if next.get_inner() == Token::DOUBLE_COLON || next.get_inner() == Token::PERIOD {
             while let Some(n) = self.next_skip_ml_comment() {
                 if n.get_inner().is_ident() {
@@ -442,10 +464,16 @@ impl PeekableIterator<TokenSpan> {
                 let mut generic_args: GenericArgs = vec![];
                 let mut start_ix = 0;
                 let mut end_ix = 0;
+                let mut is_opt = false;
+                let mut is_nn = false;
                 if next.is_some() {
                     let next = next.unwrap();
                     start_ix = next.start;
-                    if next.get_inner() == Token::ANGLE_LEFT { //TODO! depend on treat_generics_as_decl
+                    if next.get_inner_ref() == &Token::QMARK {
+                        is_opt = true;
+                    } else if next.get_inner_ref() == &Token::EXCL_MARK {
+                        is_nn = true;
+                    } else if next.get_inner_ref() == &Token::ANGLE_LEFT { //TODO! depend on treat_generics_as_decl
                         // WE MIGHT BE in a generic argument
                         self.next_skip_ml_comment();
                         let generic = self.parse_generic_argument(reporter, false);
@@ -476,14 +504,27 @@ impl PeekableIterator<TokenSpan> {
                                     break 'generic
                                 }
                             }
+                            let seek = self.get_index().unwrap();
+                            let next = self.next_skip_ml_comment();
+                            if next.is_some() {
+                                let next = next.unwrap();
+                                if next.get_inner_ref() == &Token::QMARK || next.get_inner_ref() == &Token::EXCL_MARK {
+                                    is_opt = next.get_inner_ref() == &Token::QMARK;
+                                    is_nn = next.get_inner_ref() == &Token::EXCL_MARK;
+                                } else {
+                                    self.set_index(seek);
+                                }
+                            }
                         }
                     }
                 }
 
                 let ident = QualifiedIdentPart {
                     segment: txt,
-                    generics: generic_args.to_option().map(|x: GenericArgs| x.into_span(start_ix, end_ix)),
+                    generic_args: generic_args.to_option().map(|x: GenericArgs| x.into_span(start_ix, end_ix)),
                     is_btick,
+                    is_asserted_as_non_null: is_nn,
+                    is_opt_chained_to_next: is_opt,
                     previous_link: Some(match n.get_inner() {
                         Token::DOUBLE_COLON => Connector::D_COL,
                         Token::PERIOD => Connector::PERIOD,
@@ -536,7 +577,9 @@ impl PeekableIterator<TokenSpan> {
         }
         let next = next.unwrap();
         if next.get_inner() == Token::ANGLE_RIGHT || next.get_inner() == Token::COMMA { //100% generic as <IDENT> does not make sense
-            self.set_index(seek);
+            if next.get_inner_ref() == &Token::COMMA {
+                self.set_index(seek);
+            }
             return Ok(Some((arg, next.get_inner() == Token::COMMA)))
         }
         if strict {
