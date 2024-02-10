@@ -27,8 +27,18 @@ impl Span<Token> {
         let (content, is_b) = self.get_inner().get_ident_inner();
         vec![QualifiedIdentPart {
             segment: content,
+            generics: None,
             is_btick: is_b,
             previous_link: None
         }.to_span(self.start, self.end)].to_span(self.start, self.end)
+    }
+}
+
+impl QualifiedIdent {
+    pub fn is_single(&self) -> bool {
+        self.get_inner_ref().len() == 1 && self.get_inner_ref().first().unwrap().get_inner_ref().generics.is_none()
+    }
+    pub fn is_single_allow_gen(&self) -> bool {
+        self.get_inner_ref().len() == 1
     }
 }

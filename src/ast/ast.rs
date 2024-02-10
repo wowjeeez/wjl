@@ -1,5 +1,5 @@
 use either::Either;
-use crate::ast::nodes::expression::{Expression, StructExpr};
+use crate::ast::nodes::expression::{Expression, ObjectLikeFieldDeclaration, StructDeclExpr, StructInitExpr};
 use crate::ast::nodes::qualified_ident::{Connector, GenericArgs, QualifiedIdent, QualifiedIdentPart};
 use crate::ast::nodes::statics::StaticExpr;
 use crate::ast::nodes::variable::{Assignment, DestructuringEntry, ModifiersAndDecorators, NamedRef, VariableDeclaration, VisibilityScope};
@@ -235,7 +235,7 @@ impl PeekableIterator<TokenSpan> {
         }
         let next = next.unwrap();
         if next.get_inner() == Token::COMMA || next.get_inner() == if in_arr { Token::BRACKET_RIGHT } else { Token::BRACE_RIGHT } {
-            let parsed = self.parse_qualified_ident(reporter)?;
+            let parsed = self.parse_qualified_ident(reporter, false)?;
             return Some(DestructuringEntry {
                 is_rest: is_spread,
                 name: NamedRef {
@@ -264,7 +264,7 @@ impl PeekableIterator<TokenSpan> {
             }
             let alias_tok = alias_tok.unwrap();
             if alias_tok.get_inner().is_ident() {
-                let ident = self.parse_qualified_ident(reporter)?;
+                let ident = self.parse_qualified_ident(reporter, false)?;
                 return Some(DestructuringEntry {
                     binding: Some(NamedRef {
                         entries: None,
@@ -317,7 +317,7 @@ impl PeekableIterator<TokenSpan> {
         if next.get_inner() == Token::ASSIGN {
             // default
             let default = self.parse_expr(reporter)?;
-            let parsed = self.parse_qualified_ident(reporter)?;
+            let parsed = self.parse_qualified_ident(reporter, false)?;
             return Some(DestructuringEntry {
                 is_rest: is_spread,
                 name: NamedRef {
@@ -399,7 +399,7 @@ impl PeekableIterator<TokenSpan> {
     }
 
     // expecting that we are on the first ident
-    pub fn parse_qualified_ident(&mut self, reporter: &mut ErrorReporter) -> Option<QualifiedIdent> {
+    pub fn parse_qualified_ident(&mut self, reporter: &mut ErrorReporter, treat_generics_as_decl: bool) -> Option<QualifiedIdent> {
         let first_ident = self.curr().unwrap();
         let next = self.peek_next_skip_ml_comment().0;
         let (ident, is_bt) = first_ident.get_inner().get_ident_inner();
@@ -445,7 +445,7 @@ impl PeekableIterator<TokenSpan> {
                 if next.is_some() {
                     let next = next.unwrap();
                     start_ix = next.start;
-                    if next.get_inner() == Token::ANGLE_LEFT {
+                    if next.get_inner() == Token::ANGLE_LEFT { //TODO! depend on treat_generics_as_decl
                         // WE MIGHT BE in a generic argument
                         self.next_skip_ml_comment();
                         let generic = self.parse_generic_argument(reporter, false);
@@ -609,7 +609,7 @@ impl PeekableIterator<TokenSpan> {
             let wrapped = self.parse_expr(reporter)?;
             Triple::A(Expression::GROUPED(Box::new(wrapped.get_inner())))
         } else if next.get_inner().is_ident() {
-            Triple::B(self.parse_qualified_ident(reporter)?)
+            Triple::B(self.parse_qualified_ident(reporter, false)?)
         }
         else if next.get_inner() == Token::KEYWORD_AWAIT {
             Triple::A(self.parse_await_expr(reporter)?)
@@ -625,21 +625,17 @@ impl PeekableIterator<TokenSpan> {
             Triple::A(self.parse_try_catch(reporter)?)
         } else if next.get_inner() == Token::INCR {
             Triple::A(self.parse_incr_or_decr(reporter, true)?)
+        } else if next.get_inner() == Token::KEYWORD_MATCH {
+            Triple::A(self.parse_match_expr(reporter)?)
         } else if next.get_inner() == Token::DECR {
             Triple::A(self.parse_incr_or_decr(reporter, false)?)
         } else if next.get_inner() == Token::KEYWORD_FUNC {
             Triple::A(self.parse_func_call(reporter)?)
         } else if next.get_inner() == Token::BRACKET_LEFT {
             Triple::A(self.parse_arr_expr(reporter)?)
-        } else {
+        } else { //TODO! bool invert expr somehow, make it fast
             Triple::C(next)
         };
-
-
-
-
-
-
         return None
     }
 
@@ -669,12 +665,157 @@ impl PeekableIterator<TokenSpan> {
     }
 
     // expecting that we are on the type name
-    pub fn parse_struct_init(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<StructExpr>> {
+    pub fn parse_struct_init(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<StructInitExpr>> {
 
     }
 
     // expecting that we are on the struct kw
-    pub fn parse_struct_decl(&mut self, reporter: &mut ErrorReporter) {
+    pub fn parse_struct_decl(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<StructDeclExpr>> {
+        let kw = self.curr().unwrap();
+        let struct_start = kw.start;
+        let next = self.next_skip_ml_comment();
+        if next.is_none() {
+            reporter.add(WjlError::ast(kw.end).message("Expected identifier, got nothing.").ok());
+            return None
+        }
+
+        let next = next.unwrap();
+        if !next.get_inner().is_ident() {
+            reporter.add(WjlError::ast(kw.end).message("Expected identifier.").ok());
+            return None
+        }
+        let struct_name = self.parse_qualified_ident(reporter, true)?;
+        let next = self.next_skip_ml_comment();
+        if next.is_none() {
+            reporter.add(WjlError::ast(struct_name.end).message("Expected {, got nothing.").ok());
+            return None
+        }
+        let next = next.unwrap();
+        if next.get_inner() != Token::BRACE_LEFT {
+            reporter.add(WjlError::ast(next.start).message("Expected {.").set_end_char(next.end).ok());
+            return None
+        }
+        let mut fields = vec![];
+        let fields_start = next.end;
+        let mut end = 0_usize;
+        while let next = self.next_skip_ml_comment() {
+            let mut local_start = 0_usize;
+            if next.is_none() {
+                let prev = self.peek_prev().unwrap().end;
+                reporter.add(WjlError::ast(prev).message("Expected identifier or }, got nothing.").ok());
+                return None
+            }
+            let next = next.unwrap();
+            if next.get_inner() == Token::BRACE_RIGHT {
+                break
+            }
+            local_start = next.start;
+            let mut visibility = Token::MOD_KEYWORD_PRIVATE;
+            if !next.get_inner().is_ident() {
+                if next.get_inner_ref() == &Token::MOD_KEYWORD_PUBLIC || next.get_inner_ref() == &Token::MOD_KEYWORD_PRIVATE {
+                    visibility = next.get_inner();
+                    let ident = self.next_skip_ml_comment();
+                    if ident.is_none() {
+                        reporter.add(WjlError::ast(next.end).message("Expected identifier, got nothing.").ok());
+                        return None
+                    }
+                    let ident = ident.unwrap();
+                    if !ident.get_inner_ref().is_ident() {
+                        reporter.add(WjlError::ast(ident.start).set_end_char(ident.end).message("Expected identifier.").ok());
+                        return None
+                    }
+                    local_start = ident.start;
+                } else {
+                    reporter.add(WjlError::ast(next.start).set_end_char(next.end).message("Expected identifier or public/private modifier.").ok());
+                    return None
+                }
+            }
+            let key_ident = self.parse_qualified_ident(reporter, false)?;
+            if !key_ident.is_single() {
+                reporter.add(WjlError::ast(key_ident.start).set_end_char(key_ident.end).message("Paths and generics are not allowed as struct properties.").ok());
+                return None
+            }
+            let visibility = match visibility {
+                Token::MOD_KEYWORD_PUBLIC => VisibilityScope::PUBLIC,
+                Token::MOD_KEYWORD_PRIVATE => VisibilityScope::PRIVATE,
+                _ => unreachable!()
+            };
+            let key = key_ident.get_inner().first().unwrap().get_inner().segment;
+            let next = self.next_skip_ml_comment();
+            if next.is_none() {
+                reporter.add(WjlError::ast(key_ident.end).message("Expected colon or question mark, got nothing.").ok());
+                return None
+            }
+            let mut qmark_or_colon = next.unwrap();
+            let is_optional = if qmark_or_colon.get_inner() == Token::QMARK {
+                let next = self.next_skip_ml_comment();
+                if next.is_none() {
+                    reporter.add(WjlError::ast(qmark_or_colon.end).message("Expected colon, got nothing.").ok());
+                    return None
+                }
+                qmark_or_colon = next.unwrap();
+                true
+            } else {false};
+
+            if qmark_or_colon.get_inner_ref() != Token::COLON {
+                reporter.add(WjlError::ast(qmark_or_colon.start).set_end_char(qmark_or_colon.end).message("Expected colon.").ok());
+                return None
+            }
+            let next = self.next_skip_ml_comment();
+            if next.is_none() {
+                reporter.add(WjlError::ast(qmark_or_colon.end).message("Expected type, got nothing.").ok());
+                return None
+            }
+            let next = next.unwrap();
+            if !next.get_inner_ref().is_ident() {
+                reporter.add(WjlError::ast(next.start).set_end_char(next.end).message("Expected type").ok());
+                return None
+            }
+            end = next.end;
+
+            let field_type = self.parse_qualified_ident(reporter, false)?;
+            let default = if self.next_skip_ml_comment().map_or(false, |x|x.get_inner_ref() == &Token::ASSIGN).eq(&true) {
+                let seek = self.get_index().unwrap();
+                let next = self.next_skip_ml_comment();
+                if next.is_none() {
+                    reporter.add(WjlError::ast(field_type.end).message("Expected expression, got nothing.").ok());
+                    return None
+                }
+                end = next.unwrap().end;
+                self.set_index(seek);
+                Some(self.parse_expr(reporter))?
+            } else {None};
+
+            fields.push(ObjectLikeFieldDeclaration {
+                name: key,
+                is_optional,
+                default,
+                field_type,
+                visibility,
+            }.to_span(local_start, end));
+
+            let next = self.next_skip_ml_comment();
+            if next.is_none() {
+                reporter.add(WjlError::ast(end).message("Expected comma or closing brace, got nothing.").ok());
+                return None
+            }
+            let next = next.unwrap();
+            if next.get_inner_ref() == Token::BRACE_RIGHT {
+                let end = next.end;
+                break
+            }
+            if next.get_inner_ref() == Token::COMMA {
+                continue
+            }
+            reporter.add(WjlError::ast(next.start).set_end_char(next.end).message("Expected comma or closing brace.").ok());
+        }
+        return Some(StructDeclExpr {
+            name: struct_name,
+            fields: fields.to_span(fields_start, end),
+        }.to_span(struct_start, end));
+    }
+
+    pub fn parse_match_expr(&mut self, reporter: &mut ErrorReporter) {
 
     }
 
@@ -694,23 +835,6 @@ impl PeekableIterator<TokenSpan> {
 
     pub fn parse_yield_or_return(&mut self, reporter: &mut ErrorReporter) {
 
-    }
-
-    // expecting that we are on the colon
-    pub fn parse_type_annotation(&mut self, reporter: &mut ErrorReporter) -> Option<()> {
-        let start = self.curr().unwrap().start;
-        let ident_or_paren = self.next_skip_ml_comment();
-        if ident_or_paren.is_none() {
-            reporter.add(WjlError::ast(start).message("Expected type annotation, got nothing.").ok());
-            return None
-        }
-        let ident_or_paren = ident_or_paren.unwrap();
-        if ident_or_paren.get_inner().is_ident() {
-            let qualified_type = self.parse_qualified_ident(reporter)?;
-
-        }
-
-        return None
     }
 }
 
@@ -766,10 +890,10 @@ impl ToAst for Vec<TokenSpan> {
                 let next = next.unwrap();
                 let needs_init = tok == KEYWORD_CONST || (tok == KEYWORD_VAL && !preceeding_data.is_once);
                 if next.get_inner() == Token::COLON {
-
                     //type hint
                 }
                 if next.get_inner() == Token::ASSIGN {
+                    let initializer = iter.parse_expr(reporter);
                     // init
                 }
                 if needs_init {

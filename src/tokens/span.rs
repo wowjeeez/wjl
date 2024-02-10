@@ -53,6 +53,9 @@ impl<T: Clone + Debug> Span<T> {
     pub fn get_inner(&self) -> T {
         self.inner.clone()
     }
+    pub fn get_inner_ref(&self) -> &T {
+        &self.inner
+    }
     pub fn wrap(start: usize, end: usize, with: T) -> Span<T> {
         Span {
             inner: with,
