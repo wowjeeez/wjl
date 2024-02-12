@@ -66,6 +66,7 @@ pub enum Token {
     DOUBLE_COLON,
     KEYWORD_VAR,
     KEYWORD_VAL,
+    DOLLAR,
     KEYWORD_CONST,
     MOD_KEYWORD_ONCE,
     MOD_KEYWORD_PUBLIC,
@@ -133,4 +134,20 @@ pub enum Token {
     COMMENT_ML(Vec<String>),
     NONCE,
     OP_ELVIS
+}
+
+
+impl Token {
+    pub fn is_math(&self) -> bool {
+        match self {
+            Token::SUM | Token::SUBTRACT | Token::DIV | Token::MUL | Token::MOD | Token::BIT_NOT | Token::BIT_AND | Token::BIT_XOR | Token::BIT_S_RIGHT_SHIFT | Token::BIT_ZERO_FILL_RIGHT_SHIFT | Token::BIT_ZERO_FILL_LEFT_SHIFT => true,
+            _ => false
+        }
+    }
+    pub fn is_binop(&self) -> bool {
+        match self {
+            Token::OR | Token::AND => true,
+            _ => false
+        }
+    }
 }

@@ -427,6 +427,7 @@ fn match_char(char: char) -> Token {
         '&' => Token::BIT_AND,
         '~' => Token::BIT_NOT,
         '^' => Token::BIT_XOR,
+        '$' => Token::DOLLAR,
         _ => Token::NONCE,
     }
 }

@@ -1,10 +1,10 @@
-use either::Either;
-use crate::ast::nodes::expression::{ConstraintExprJoin, Expression, ObjectLikeFieldDeclaration, StructDeclExpr, StructInitExpr, TypeConstraintExpr, TypeConstraintExprPart};
+use crate::ast::nodes::expression::{BinOp, BooleanExpression, ElvisExpr, Expression, FunctionCallExpr, LogExpr, ObjectLikeFieldDeclaration, StructDeclExpr, StructInitExpr, TernaryExpr, TypeConstraintExpr, TypeConstraintExprPart};
 use crate::ast::nodes::qualified_ident::{Connector, GenericArgs, QualifiedIdent, QualifiedIdentPart};
 use crate::ast::nodes::statics::StaticExpr;
 use crate::ast::nodes::variable::{Assignment, DestructuringEntry, ModifiersAndDecorators, NamedRef, VariableDeclaration, VisibilityScope};
 use crate::errors::{ErrorReporter, WjlError};
 use crate::helpers::{opt_to_broad_err, Triple};
+use crate::helpers::Triple::B;
 use crate::helpers::vec_utils::AsOption;
 use crate::iter::{GenericIterator, PeekableIterator, wrap_iter};
 use crate::tokens::span::{IntoSpan, Span as TSpan};
@@ -403,6 +403,9 @@ impl PeekableIterator<TokenSpan> {
         let first_ident = self.curr().unwrap();
         let next = self.peek_next_skip_ml_comment().0;
         let (ident, is_bt) = first_ident.get_inner().get_ident_inner();
+        if ident == "this".to_string() {
+            todo!("this arg disambiguation")
+        }
         let ident = QualifiedIdentPart {
             segment: ident,
             is_btick: is_bt,
@@ -637,11 +640,132 @@ impl PeekableIterator<TokenSpan> {
         return None
     }
 
+    pub fn ecx_parse_preceeding_expr(&mut self, reporter: &mut ErrorReporter, expr: TSpan<Expression>) -> Option<TSpan<Expression>> {
+        let next = self.next_skip_ml_comment();
+        if next.is_none() {
+            let (start, end) = (expr.start, expr.end);
+            return Some(expr)
+        }
+        let next = next.unwrap();
+        if next.get_inner_ref() == &Token::PAREN_LEFT {
+            return Some(self.parse_paren_func_call(reporter, expr)?.map(|x| Expression::FUNC_CALL(x)))
+        }
+        if next.get_inner_ref() == &Token::BRACE_LEFT {
+            return Some(self.parse_struct_init(reporter, expr)?.map(|x| Expression::STRUCT_INIT(x)))
+        }
+        if next.get_inner_ref() == &Token::PIPE_OP {
+
+        }
+        if next.get_inner_ref().is_math() {
+            let start = expr.start;
+            let right = self.parse_expr(reporter)?;
+            let end = right.end;
+            let op = next.get_inner_ref().as_logical();
+            return Some(Expression::LOGICAL(LogExpr {
+                left: Box::new(expr),
+                right: Box::new(right),
+                op: op.into_span(next.start, next.end)
+            }).into_span(start, end))
+        }
+        if next.get_inner_ref().is_binop() {
+            let start = expr.start;
+            let right = self.parse_expr(reporter)?;
+            let end = right.end;
+            let op = next.get_inner_ref().as_binop_bool();
+            return Some(Expression::BOOLEAN(BooleanExpression {
+                left: Box::new(expr),
+                right: Box::new(right),
+                op: op.into_span(next.start, next.end)
+            }).into_span(start, end))
+        }
+        if next.get_inner_ref() == Token::OP_ELVIS {
+            let start = expr.start;
+            let right = self.parse_expr(reporter)?;
+            let end = right.end;
+            return Some(Expression::ELVIS(ElvisExpr {
+                left: Box::new(expr),
+                right: Box::new(right),
+            }).into_span(start, end))
+        }
+
+        return None
+    }
+
+    // expecting that we are on the dollar sign
+    pub fn parse_sugar_thunk_func_call(&mut self, reporter: &mut ErrorReporter, reference: TSpan<Expression>) {
+
+    }
+    // expecting that we are on the paren
+    pub fn parse_paren_func_call(&mut self, reporter: &mut ErrorReporter, reference: TSpan<Expression>) -> Option<TSpan<FunctionCallExpr>> {
+        let start = reference.start;
+        let paren = self.peek_next_skip_ml_comment().0;
+        if paren.is_none() {
+            reporter.add(WjlError::ast(reference.end).message("Expected comma or ), got nothing.").ok());
+            return None
+        }
+        let p = paren.unwrap();
+        if p.get_inner_ref() == &Token::PAREN_RIGHT {
+            return Some(FunctionCallExpr {
+                reference: Box::new(reference),
+                arguments: vec![]
+            }.into_span(start, p.end))
+        }
+
+        let argument1 = self.parse_expr(reporter)?;
+        let ix = self.get_index().unwrap();
+        let next = self.next_skip_ml_comment();
+        if next.is_none() {
+            reporter.add(WjlError::ast(argument1.end).message("Expected comma or ), got nothing.").ok());
+            return None
+        }
+        let next = next.unwrap();
+        if next.get_inner_ref() == &Token::PAREN_RIGHT {
+            return Some(FunctionCallExpr {
+                reference: Box::new(reference),
+                arguments: vec![argument1]
+            }.into_span(start, next.end))
+        }
+        if next.get_inner_ref() != Token::COMMA {
+            reporter.add(WjlError::ast(next.start).set_end_char(next.end).message("Expected comma or ).").ok());
+            return None
+        }
+        self.set_index(ix);
+        let mut args = vec![argument1];
+        let mut end = 0;
+        while let next = self.next_skip_ml_comment() {
+            if next.is_none() {
+                reporter.add(WjlError::ast(args.pop().unwrap().end).message("Expected comma or ), got nothing.").ok());
+                return None
+            }
+            let next = next.unwrap();
+            if next.get_inner_ref() == &Token::COMMA {
+                let arg = self.parse_expr(reporter)?;
+                args.push(arg);
+                continue
+            }
+            if next.get_inner_ref() == &Token::PAREN_RIGHT {
+                end = next.end;
+                break
+            }
+            reporter.add(WjlError::ast(next.start).set_end_char(next.end).message("Expected comma or ).").ok());
+            return None
+        }
+        Some(FunctionCallExpr {
+            arguments: args,
+            reference: Box::new(reference)
+        }.into_span(start, end))
+    }
+
+    fn qualified_ident_to_expr(ident: QualifiedIdent) -> TSpan<Expression> {
+        let (start, end) = (ident.start, ident.end);
+        return Expression::IDENT(ident).into_span(start, end)
+    }
+
     // expecting that we are before the expr
     // expression kinds that we be parsing here:
     pub fn parse_expr(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<Expression>> {
         let start = self.curr().unwrap();
-        let next = self.next();
+        let next = self.next_skip_ml_comment();
         if next.is_none() {
             reporter.add(WjlError::ast(start.end).message("Expected expression, got nothing.").ok());
             return None
@@ -650,34 +774,36 @@ impl PeekableIterator<TokenSpan> {
 
         let first_part = if next.get_inner() == Token::PAREN_LEFT {
             let wrapped = self.parse_expr(reporter)?;
-            Triple::A(Expression::GROUPED(Box::new(wrapped.get_inner())))
+            wrapped.map(|x| Expression::GROUPED(Box::new(x)))
         } else if next.get_inner().is_ident() {
-            Triple::B(self.parse_qualified_ident(reporter, false)?)
+            let expr = self.ecx_parse_preceeding_expr(reporter, self.parse_qualified_ident(reporter, false)?.map(|x| Expression::IDENT(x)))?;
+            expr
         }
         else if next.get_inner() == Token::KEYWORD_AWAIT {
-            Triple::A(self.parse_await_expr(reporter)?)
+            let wrapped = self.parse_expr(reporter)?;
+            wrapped.map(|x| Expression::AWAIT(Box::new(x)))
         } else if next.get_inner() == Token::KEYWORD_CLASS {
-            Triple::A(self.parse_class_decl(reporter, true)?)
+            self.parse_class_decl(reporter, true)?
         } else if next.get_inner() == Token::KEYWORD_IF {
-            Triple::A(self.parse_if_expr_or_stmt(reporter, true)?)
+            self.parse_if_expr_or_stmt(reporter, true)?
         } else if next.get_inner() == Token::WJL_COMPILER_PLACEHOLDER {
-            Triple::A(Expression::WJL_PLACEHOLDER)
+            Expression::WJL_PLACEHOLDER
         } else if next.get_inner() == Token::OP_SPREAD {
-            Triple::A(self.parse_spread_expr(reporter)?)
+            self.parse_spread_expr(reporter)?
         } else if next.get_inner() == Token::KEYWORD_TRY {
-            Triple::A(self.parse_try_catch(reporter)?)
+            self.parse_try_catch(reporter)?
         } else if next.get_inner() == Token::INCR {
-            Triple::A(self.parse_incr_or_decr(reporter, true)?)
+            self.parse_incr_or_decr(reporter, true)?
         } else if next.get_inner() == Token::KEYWORD_MATCH {
-            Triple::A(self.parse_match_expr(reporter)?)
+            self.parse_match_expr(reporter)?
         } else if next.get_inner() == Token::DECR {
-            Triple::A(self.parse_incr_or_decr(reporter, false)?)
+            self.parse_incr_or_decr(reporter, false)?
         } else if next.get_inner() == Token::KEYWORD_FUNC {
-            Triple::A(self.parse_func_call(reporter)?)
+            self.parse_func_decl(reporter)?
         } else if next.get_inner() == Token::BRACKET_LEFT {
-            Triple::A(self.parse_arr_expr(reporter)?)
+            self.parse_arr_expr(reporter)?
         } else { //TODO! bool invert expr somehow, make it fast
-            Triple::C(next)
+            todo!(next)
         };
         return None
     }
@@ -724,10 +850,10 @@ impl PeekableIterator<TokenSpan> {
         if next.map_or(true, |x| x.get_inner_ref() != Token::QMARK).eq(&true) {
             return Some(constraint)
         }
-
+        self.next_skip_ml_comment(); //go to qmark
         let ternary = self.parse_ternary_expr(reporter, constraint)?;
-
-        return None
+        let (start, end) = (ternary.start, ternary.end);
+        Some(Expression::TERNARY(ternary.get_inner()).into_span(start, end))
     }
 
     // expecting that we are on the colon from where the constraint is expected
@@ -766,8 +892,8 @@ impl PeekableIterator<TokenSpan> {
             }.into_span(colon.start, end))
         }
         let to_constraint_op = |x: &Token| match x {
-            Token::SUM => ConstraintExprJoin::AND,
-            Token::PIPE => ConstraintExprJoin::OR,
+            Token::SUM => BinOp::AND,
+            Token::PIPE => BinOp::OR,
             _ => unreachable!()
         };
 
@@ -816,13 +942,31 @@ impl PeekableIterator<TokenSpan> {
     }
 
     // expecting that we are on the question mark
-    pub fn parse_ternary_expr(&mut self, reporter: &mut ErrorReporter, condition: TSpan<Expression>) {
-
+    pub fn parse_ternary_expr(&mut self, reporter: &mut ErrorReporter, condition: TSpan<Expression>) -> Option<TSpan<TernaryExpr>> {
+        let left_expr = self.parse_expr(reporter)?;
+        let next = self.next_skip_ml_comment();
+        if next.is_none() {
+            reporter.add(WjlError::ast(left_expr.end).message("Expected colon, got nothing.").ok());
+            return None
+        }
+        let next = next.unwrap();
+        if next.get_inner_ref() != &Token::COLON {
+            reporter.add(WjlError::ast(next.start).set_end_char(next.end).message("Expected colon.").ok());
+            return None
+        }
+        let right_expr = self.parse_expr(reporter)?;
+        let start = condition.start;
+        let end = right_expr.end;
+        Some(TernaryExpr {
+            condition,
+            left: left_expr,
+            right: right_expr
+        }.into_span(start, end))
     }
 
 
 
-    pub fn parse_func_call(&mut self, reporter: &mut ErrorReporter) {
+    pub fn parse_func_decl(&mut self, reporter: &mut ErrorReporter) {
 
     }
 
@@ -838,17 +982,13 @@ impl PeekableIterator<TokenSpan> {
 
     }
 
-    // expecting that we are on the await
-    pub fn parse_await_expr(&mut self, reporter: &mut ErrorReporter) {
-
-    }
     // expecting that we are on the as kw
     pub fn parse_typecast(&mut self, reporter: &mut ErrorReporter) {
 
     }
 
     // expecting that we are on the type name
-    pub fn parse_struct_init(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<StructInitExpr>> {
+    pub fn parse_struct_init(&mut self, reporter: &mut ErrorReporter, expr: TSpan<Expression>) -> Option<TSpan<StructInitExpr>> {
 
     }
 

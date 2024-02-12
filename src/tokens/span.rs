@@ -63,11 +63,14 @@ impl<T: Clone + Debug> Span<T> {
             end
         }
     }
+    pub fn map<R, F: FnOnce(T) -> R>(self, func: F) -> Span<R> {
+        let wrapped = func(self.get_inner());
+        Span::wrap(self.start, self.end, wrapped)
+    }
 }
 pub trait IntoSpan<T: Clone + Debug> {
     fn to_span(&self, start: usize, end: usize) -> Span<T>;
     fn into_span(self, start: usize, end: usize) -> Span<T>;
-
 }
 
 impl <T> IntoSpan<T> for T

@@ -7,3 +7,5 @@ if x == 10 {} else if {}
 /* lmao*/
 x::lol.idx
 :3
+
+val map = ["yorick", "wowjesus"] |> map it.firstToUpper()
