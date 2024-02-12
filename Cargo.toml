@@ -8,3 +8,5 @@ edition = "2021"
 [dependencies]
 either = "1.9.0"
 colored = "2.1.0"
+serde = {version = "1.0.196", features = ["derive"]}
+sha1_smol="1.0.0"

@@ -1,3 +1,4 @@
+use std::hash::{Hash, Hasher};
 use crate::ast::nodes::expression::Expression;
 use crate::tokens::span::{IntoSpan, Span};
 use crate::tokens::Token;
@@ -29,6 +30,8 @@ impl Span<Token> {
         let (content, is_b) = self.get_inner().get_ident_inner();
         vec![QualifiedIdentPart {
             segment: content,
+            is_asserted_as_non_null: false,
+            is_opt_chained_to_next: false,
             generic_args: None,
             is_btick: is_b,
             previous_link: None

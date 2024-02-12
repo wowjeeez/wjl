@@ -426,7 +426,7 @@ fn match_char(char: char) -> Token {
         '&' => Token::BIT_AND,
         '~' => Token::BIT_NOT,
         '^' => Token::BIT_XOR,
-        '$' => Token::DOLLAR,
+        ',' => Token::COMMA,
         _ => Token::NONCE,
     }
 }
@@ -750,10 +750,6 @@ impl Span {
             Token::ARROW => "=>".green(),
             LITERAL_DOUBLE(_) => "<double quote literal>".red(),
             LITERAL_SINGLE(_) => "<single quote literal>".red(),
-            Token::OP_FUNC_SUM => "sum".green(),
-            Token::OP_FUNC_DIV => "div".green(),
-            Token::OP_FUNC_MOD => "mod".green(),
-            Token::OP_FUNC_SUB => "sub".green(),
             Token::WJL_COMPILER_PLACEHOLDER => "@@wjl_internal".black(),
             Token::DELIMITER => ";".green(),
             Token::WHITESPACE => " ".into(),
@@ -767,7 +763,12 @@ impl Span {
             Token::COMMENT(inner) => format!("[comment: {}]", inner).red(),
             Token::COMMENT_ML(inner) => format!("[ml_comment: {:?}]", inner).red(),
             Token::KEYWORD_AS => "as".blue(),
-            Token::MOD_KEYWORD_PRIVATE => "private".blue()
+            Token::MOD_KEYWORD_PRIVATE => "private".blue(),
+            Token::KEYWORD_TRUE => "true".red(),
+            Token::KEYWORD_FALSE => "false".red(),
+            Token::KEYWORD_NULL => "null".red(),
+            Token::EXP_NUMBER(n, is_b) => format!("[exponential: {}, is_bigint: {}]", n, is_b).red(),
+            Token::OP_ELVIS => ":?".green()
         }
     }
 }

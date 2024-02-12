@@ -37,6 +37,7 @@ pub trait GenericIterator<T: Clone> {
 pub struct PeekableIterator<T> {
     inner: Vec<T>,
     index: Option<usize>,
+    collected: Vec<usize>
 }
 
 impl<T: Clone> GenericIterator<T> for PeekableIterator<T> {
@@ -57,5 +58,25 @@ pub fn wrap_iter<T>(elements: Vec<T>) -> PeekableIterator<T> {
     PeekableIterator {
         inner: elements,
         index: None,
+        collected: vec![]
+    }
+}
+
+impl <T: Clone> PeekableIterator<T> {
+    pub fn collect_index(&mut self, index: usize) {
+        self.collected.push(index)
+    }
+    pub fn clear_index_cache(&mut self) {
+        self.collected.clear();
+    }
+    pub fn free_index(&mut self, index: usize) {
+        self.collected = self.collected.clone().into_iter().filter(|x| x != &index).collect();
+    }
+    pub fn get_collected_and_clear(&mut self) -> Vec<T> {
+        let coll = self.get_content().iter().enumerate().filter(|(x, _)| self.collected.contains(x))
+            .map(|(_, t)| t.clone())
+            .collect::<Vec<T>>();
+        self.clear_index_cache();
+        coll
     }
 }

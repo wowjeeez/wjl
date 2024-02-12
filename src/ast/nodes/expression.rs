@@ -123,9 +123,9 @@ pub struct StructInitExpr {}
 
 #[derive(Clone, Debug)]
 pub struct TernaryExpr {
-    pub condition: TSpan<Expression>,
-    pub left: TSpan<Expression>,
-    pub right: TSpan<Expression>
+    pub condition: Box<TSpan<Expression>>,
+    pub left: Box<TSpan<Expression>>,
+    pub right: Box<TSpan<Expression>>
 }
 
 #[derive(Clone, Debug)]

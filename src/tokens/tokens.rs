@@ -1,7 +1,7 @@
 use crate::tokens::span::Span;
 use either::Either;
 
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub enum IdentKind {
     DEFAULT(String),
     BACKTICK(String),
@@ -24,7 +24,7 @@ impl IdentKind {
 }
 
 pub type Literal = Vec<Either<String, Vec<Token>>>;
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 #[allow(non_camel_case_types, unused)]
 pub enum Token {
     ANGLE_LEFT,
@@ -66,7 +66,6 @@ pub enum Token {
     DOUBLE_COLON,
     KEYWORD_VAR,
     KEYWORD_VAL,
-    DOLLAR,
     KEYWORD_CONST,
     MOD_KEYWORD_ONCE,
     MOD_KEYWORD_PUBLIC,

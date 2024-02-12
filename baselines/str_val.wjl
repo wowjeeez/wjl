@@ -9,3 +9,7 @@ x::lol.idx
 :3
 
 val map = ["yorick", "wowjesus"] |> map it.firstToUpper()
+val x = [true, false]
+struct Test {
+    nullableField?: Int = null
+}

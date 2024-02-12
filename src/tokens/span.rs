@@ -63,7 +63,7 @@ impl<T: Clone + Debug> Span<T> {
             end
         }
     }
-    pub fn map<R, F: FnOnce(T) -> R>(self, func: F) -> Span<R> {
+    pub fn map<R: Clone + Debug, F: FnOnce(T) -> R>(self, func: F) -> Span<R> {
         let wrapped = func(self.get_inner());
         Span::wrap(self.start, self.end, wrapped)
     }

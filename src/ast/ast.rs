@@ -3,8 +3,7 @@ use crate::ast::nodes::qualified_ident::{Connector, GenericArgs, QualifiedIdent,
 use crate::ast::nodes::statics::StaticExpr;
 use crate::ast::nodes::variable::{Assignment, DestructuringEntry, ModifiersAndDecorators, NamedRef, VariableDeclaration, VisibilityScope};
 use crate::errors::{ErrorReporter, WjlError};
-use crate::helpers::{opt_to_broad_err, Triple};
-use crate::helpers::Triple::B;
+use crate::helpers::{opt_to_broad_err};
 use crate::helpers::vec_utils::AsOption;
 use crate::iter::{GenericIterator, PeekableIterator, wrap_iter};
 use crate::tokens::span::{IntoSpan, Span as TSpan};
@@ -557,11 +556,11 @@ impl PeekableIterator<TokenSpan> {
             return Err(())
         }
         let next_token = next_token.unwrap();
-        if !next_token.get_inner().is_ident()
-            && !next_token.get_inner().is_static()
-            && !next_token.get_inner() != Token::BRACKET_LEFT
-            && !next_token.get_inner() != Token::KEYWORD_STRUCT
-            && !next_token.get_inner() != Token::KEYWORD_CLASS
+        if !next_token.get_inner_ref().is_ident()
+            && next_token.get_inner_ref().is_static()
+            && next_token.get_inner_ref() != &Token::BRACKET_LEFT
+            && next_token.get_inner_ref() != &Token::KEYWORD_STRUCT
+            && next_token.get_inner_ref() != &Token::KEYWORD_CLASS
         {
             if strict {
                 reporter.add(WjlError::ast(next_token.start).message("Unexpected token in generic argument.").set_end_char(next_token.end).ok());
@@ -571,7 +570,12 @@ impl PeekableIterator<TokenSpan> {
         }
         // we might have a generic
         // and we only accept a subset of expressions here
-        let arg = opt_to_broad_err(self.parse_expr(reporter))??;
+        let arg = opt_to_broad_err(self.parse_expr(reporter))?;
+        let arg = arg;
+        if arg.is_none() {
+            return Err(())
+        }
+        let arg = arg.unwrap();
         let seek = self.get_index().unwrap();
         let next = self.next_skip_ml_comment();
         if next.is_none() {
@@ -678,7 +682,7 @@ impl PeekableIterator<TokenSpan> {
                 op: op.into_span(next.start, next.end)
             }).into_span(start, end))
         }
-        if next.get_inner_ref() == Token::OP_ELVIS {
+        if next.get_inner_ref() == &Token::OP_ELVIS {
             let start = expr.start;
             let right = self.parse_expr(reporter)?;
             let end = right.end;
@@ -691,8 +695,7 @@ impl PeekableIterator<TokenSpan> {
         return None
     }
 
-    // expecting that we are on the dollar sign
-    pub fn parse_sugar_thunk_func_call(&mut self, reporter: &mut ErrorReporter, reference: TSpan<Expression>) {
+    pub fn parse_expr_func_call(&mut self, reporter: &mut ErrorReporter, reference: TSpan<Expression>) {
 
     }
     // expecting that we are on the paren
@@ -725,7 +728,7 @@ impl PeekableIterator<TokenSpan> {
                 arguments: vec![argument1]
             }.into_span(start, next.end))
         }
-        if next.get_inner_ref() != Token::COMMA {
+        if next.get_inner_ref() != &Token::COMMA {
             reporter.add(WjlError::ast(next.start).set_end_char(next.end).message("Expected comma or ).").ok());
             return None
         }
@@ -772,38 +775,42 @@ impl PeekableIterator<TokenSpan> {
         }
         let next = next.unwrap();
 
-        let first_part = if next.get_inner() == Token::PAREN_LEFT {
+        let first_part = if next.get_inner_ref() == &Token::PAREN_LEFT {
             let wrapped = self.parse_expr(reporter)?;
             wrapped.map(|x| Expression::GROUPED(Box::new(x)))
         } else if next.get_inner().is_ident() {
-            let expr = self.ecx_parse_preceeding_expr(reporter, self.parse_qualified_ident(reporter, false)?.map(|x| Expression::IDENT(x)))?;
+            let ident = self.parse_qualified_ident(reporter, false)?;
+            let (start, end) = (ident.start, ident.end);
+            let expr = self.ecx_parse_preceeding_expr(reporter, Expression::IDENT(ident).into_span(start, end))?;
             expr
+        } else if next.get_inner_ref().is_static() {
+            Expression::STATIC(next.get_inner().as_static_unchecked()).into_span(next.start, next.end)
         }
-        else if next.get_inner() == Token::KEYWORD_AWAIT {
+        else if next.get_inner_ref() == &Token::KEYWORD_AWAIT {
             let wrapped = self.parse_expr(reporter)?;
             wrapped.map(|x| Expression::AWAIT(Box::new(x)))
-        } else if next.get_inner() == Token::KEYWORD_CLASS {
+        } else if next.get_inner_ref() == &Token::KEYWORD_CLASS {
             self.parse_class_decl(reporter, true)?
-        } else if next.get_inner() == Token::KEYWORD_IF {
+        } else if next.get_inner_ref() == &Token::KEYWORD_IF {
             self.parse_if_expr_or_stmt(reporter, true)?
-        } else if next.get_inner() == Token::WJL_COMPILER_PLACEHOLDER {
-            Expression::WJL_PLACEHOLDER
-        } else if next.get_inner() == Token::OP_SPREAD {
+        } else if next.get_inner_ref() == &Token::WJL_COMPILER_PLACEHOLDER {
+            Expression::WJL_PLACEHOLDER.into_span(next.start, next.end)
+        } else if next.get_inner_ref() == &Token::OP_SPREAD {
             self.parse_spread_expr(reporter)?
-        } else if next.get_inner() == Token::KEYWORD_TRY {
+        } else if next.get_inner_ref() == &Token::KEYWORD_TRY {
             self.parse_try_catch(reporter)?
-        } else if next.get_inner() == Token::INCR {
+        } else if next.get_inner_ref() == &Token::INCR {
             self.parse_incr_or_decr(reporter, true)?
-        } else if next.get_inner() == Token::KEYWORD_MATCH {
+        } else if next.get_inner_ref() == &Token::KEYWORD_MATCH {
             self.parse_match_expr(reporter)?
-        } else if next.get_inner() == Token::DECR {
+        } else if next.get_inner_ref() == &Token::DECR {
             self.parse_incr_or_decr(reporter, false)?
-        } else if next.get_inner() == Token::KEYWORD_FUNC {
+        } else if next.get_inner_ref() == &Token::KEYWORD_FUNC {
             self.parse_func_decl(reporter)?
-        } else if next.get_inner() == Token::BRACKET_LEFT {
-            self.parse_arr_expr(reporter)?
+        } else if next.get_inner_ref() == &Token::BRACKET_LEFT {
+            self.parse_arr_expr(reporter)?.map(|x| Expression::STATIC(x))
         } else { //TODO! bool invert expr somehow, make it fast
-            todo!(next)
+            todo!("{:?}", next)
         };
         return None
     }
@@ -847,7 +854,7 @@ impl PeekableIterator<TokenSpan> {
         let next = self.peek_next_skip_ml_comment().0;
         let (start, end) = (constraint.start, constraint.end);
         let constraint = Expression::TYPE_CONSTRAINT(Box::new(constraint.get_inner())).into_span(start, end);
-        if next.map_or(true, |x| x.get_inner_ref() != Token::QMARK).eq(&true) {
+        if next.map_or(true, |x| x.get_inner_ref() != &Token::QMARK).eq(&true) {
             return Some(constraint)
         }
         self.next_skip_ml_comment(); //go to qmark
@@ -882,7 +889,7 @@ impl PeekableIterator<TokenSpan> {
             }.into_span(colon.start, end))
         }
         let next = next.unwrap();
-        if next.get_inner_ref() != Token::PIPE && next.get_inner_ref() != Token::SUM {
+        if next.get_inner_ref() != &Token::PIPE && next.get_inner_ref() != &Token::SUM {
             return Some(TypeConstraintExpr {
                 receiver: left,
                 constraints: vec![TypeConstraintExprPart {
@@ -916,7 +923,7 @@ impl PeekableIterator<TokenSpan> {
             }
             let constraint = self.parse_qualified_ident(reporter, false)?;
             let next = self.peek_next_skip_ml_comment().0;
-            if next.map_or(true, |x| x.get_inner_ref() != &Token::SUM && x.get_inner_ref() != Token::PIPE).eq(&true) {
+            if next.as_ref().map_or(true, |x| x.get_inner_ref() != &Token::SUM && x.get_inner_ref() != &Token::PIPE).eq(&true) {
                 let start = constraint.start;
                 let end = constraint.end;
                 o_end = end;
@@ -958,38 +965,38 @@ impl PeekableIterator<TokenSpan> {
         let start = condition.start;
         let end = right_expr.end;
         Some(TernaryExpr {
-            condition,
-            left: left_expr,
-            right: right_expr
+            condition: Box::new(condition),
+            left: Box::new(left_expr),
+            right: Box::new(right_expr)
         }.into_span(start, end))
     }
 
 
 
-    pub fn parse_func_decl(&mut self, reporter: &mut ErrorReporter) {
-
+    pub fn parse_func_decl(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<Expression>> {
+        todo!()
     }
 
-    pub fn parse_incr_or_decr(&mut self, reporter: &mut ErrorReporter, is_incr: bool) {
-
+    pub fn parse_incr_or_decr(&mut self, reporter: &mut ErrorReporter, is_incr: bool) -> Option<TSpan<Expression>> {
+        todo!()
     }
 
-    pub fn parse_try_catch(&mut self, reporter: &mut ErrorReporter) {
-
+    pub fn parse_try_catch(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<Expression>> {
+        todo!()
     }
 
-    pub fn parse_spread_expr(&mut self, reporter: &mut ErrorReporter) {
-
+    pub fn parse_spread_expr(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<Expression>> {
+        todo!()
     }
 
     // expecting that we are on the as kw
-    pub fn parse_typecast(&mut self, reporter: &mut ErrorReporter) {
-
+    pub fn parse_typecast(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<Expression>> {
+        todo!()
     }
 
     // expecting that we are on the type name
     pub fn parse_struct_init(&mut self, reporter: &mut ErrorReporter, expr: TSpan<Expression>) -> Option<TSpan<StructInitExpr>> {
-
+        todo!()
     }
 
     // expecting that we are on the struct kw
@@ -1079,7 +1086,7 @@ impl PeekableIterator<TokenSpan> {
                 qmark_or_colon = next.unwrap();
                 true
             } else {false};
-            if qmark_or_colon.get_inner_ref() != Token::COLON {
+            if qmark_or_colon.get_inner_ref() != &Token::COLON {
                 reporter.add(WjlError::ast(qmark_or_colon.start).set_end_char(qmark_or_colon.end).message("Expected colon.").ok());
                 return None
             }
@@ -1112,11 +1119,11 @@ impl PeekableIterator<TokenSpan> {
                 return None
             }
             let next = next.unwrap();
-            if next.get_inner_ref() == Token::BRACE_RIGHT {
+            if next.get_inner_ref() == &Token::BRACE_RIGHT {
                 end = next.end;
                 break
             }
-            if next.get_inner_ref() == Token::COMMA {
+            if next.get_inner_ref() == &Token::COMMA {
                 continue
             }
             reporter.add(WjlError::ast(next.start).set_end_char(next.end).message("Expected comma or closing brace.").ok());
@@ -1127,26 +1134,26 @@ impl PeekableIterator<TokenSpan> {
         }.to_span(struct_start, end));
     }
 
-    pub fn parse_match_expr(&mut self, reporter: &mut ErrorReporter) {
-
+    pub fn parse_match_expr(&mut self, reporter: &mut ErrorReporter)  -> Option<TSpan<Expression>> {
+        todo!()
     }
 
     // expecting that we are on the enum kw
-    pub fn parse_enum_decl(&mut self, reporter: &mut ErrorReporter) {
-
+    pub fn parse_enum_decl(&mut self, reporter: &mut ErrorReporter)  -> Option<TSpan<Expression>> {
+        todo!()
     }
 
     // expecting that we are on the class kw
-    pub fn parse_class_decl(&mut self, reporter: &mut ErrorReporter, can_be_anon: bool) {
-
+    pub fn parse_class_decl(&mut self, reporter: &mut ErrorReporter, can_be_anon: bool)  -> Option<TSpan<Expression>> {
+        todo!()
     }
 
-    pub fn parse_if_expr_or_stmt(&mut self, reporter: &mut ErrorReporter, needs_catchall: bool) {
-
+    pub fn parse_if_expr_or_stmt(&mut self, reporter: &mut ErrorReporter, needs_catchall: bool)  -> Option<TSpan<Expression>> {
+        todo!()
     }
 
-    pub fn parse_yield_or_return(&mut self, reporter: &mut ErrorReporter) {
-
+    pub fn parse_yield_or_return(&mut self, reporter: &mut ErrorReporter)  -> Option<TSpan<Expression>> {
+        todo!()
     }
 }
 
@@ -1168,7 +1175,7 @@ impl ToAst for Vec<TokenSpan> {
                 let next = next.unwrap();
 
                 let var_name = if let Token::IDENT(ident) = next.get_inner() {
-                    let parsed = iter.parse_qualified_ident(reporter);
+                    let parsed = iter.parse_qualified_ident(reporter, true);
                     if parsed.is_none() {
                         break
                     }
