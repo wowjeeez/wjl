@@ -13,6 +13,7 @@ mod ast;
 mod caching;
 
 fn main() {
+    tracing_subscriber::fmt::init();
     let baseline_dep = include_str!("../baselines/isolated/use.wjl").to_string();
     let mut reporter = ErrorReporter::for_file("str_val.wjl".to_string(), &baseline_dep);
     let stream = lex_stream(&baseline_dep, &mut reporter);

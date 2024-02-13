@@ -1,4 +1,5 @@
 use either::Either;
+use tracing::{debug, error, info};
 use crate::ast::nodes::dependency::DependencyImport;
 use crate::ast::nodes::expression::{AppliedDecoratorExpr, BinOp, BooleanExpression, ElvisExpr, Expression, FunctionCallExpr, LogExpr, ObjectLikeFieldDeclaration, StructDeclExpr, StructInitExpr, TernaryExpr, TypeConstraintExpr, TypeConstraintExprPart};
 use crate::ast::nodes::qualified_ident::{Connector, GenericArgs, QualifiedIdent, QualifiedIdentPart};
@@ -78,6 +79,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
 
     // will consume from the iter expecting that we are on the {
     pub fn parse_object_destruct_expr(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<NamedRef>> {
+        debug!("Parsing object destruct expr");
         let before = self.get_index().unwrap();
         let start = self.curr().unwrap().start;
         let first_tok = self.next_skip_ml_comment();
@@ -137,6 +139,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
 
     // will consume from the iter expecting that we are on the [
     pub fn parse_array_destruct_expr(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<NamedRef>> {
+        debug!("Parsing array destruct expr");
         let before = self.get_index().unwrap();
         let start = self.curr().unwrap().start;
         let first_tok = self.next_skip_ml_comment();
@@ -188,6 +191,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
 
     // expecting that we are before the ident or rest arg
     pub fn parse_identifier_in_destruct(&mut self, in_arr: bool, reporter: &mut ErrorReporter) -> Option<TSpan<DestructuringEntry>> {
+        debug!("Parsing ident in destruct expr");
         let mut target = self.next_skip_ml_comment().unwrap(); //we know its there otherwise we dont call it
         let start = target.start;
         let mut inner = target.get_inner();
@@ -340,6 +344,8 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
     }
     // expecting that we are on the first ident
     pub fn parse_qualified_ident(&mut self, reporter: &mut ErrorReporter, treat_generics_as_decl: bool) -> Option<QualifiedIdent> {
+        debug!("Parsing identifier");
+        //TODO! parse generics even if they are on the first arg
         let first_ident = self.curr().unwrap();
         let next = self.peek_next_skip_ml_comment().0;
         let (ident, is_bt) = first_ident.get_inner().get_ident_inner();
@@ -411,6 +417,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
                 let mut is_nn = false;
                 if next.is_some() {
                     let next = next.unwrap();
+                    debug!("Next token {:?}", next.get_inner_ref());
                     start_ix = next.start;
                     if next.get_inner_ref() == &Token::QMARK {
                         is_opt = true;
@@ -418,9 +425,11 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
                         is_nn = true;
                     } else if next.get_inner_ref() == &Token::ANGLE_LEFT { //TODO! depend on treat_generics_as_decl
                         // WE MIGHT BE in a generic argument
-                        self.next_skip_ml_comment();
+                        //self.next_skip_ml_comment();
+                        debug!("Parsing generic argument in ident context");
                         let generic = self.parse_generic_argument(reporter, false);
                         if generic.is_err() {
+                            error!("Failed to parse generic arg");
                             return None
                         }
                         let generic = generic.unwrap();
@@ -431,7 +440,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
                             if was_comma {
                                 'generic: while let next = self.next_skip_ml_comment() {
                                     if next.is_none() {
-                                        reporter.add(WjlError::ast(end).message("Expected comma or closure, got nothing.").ok());
+                                        reporter.add(WjlError::ast(end).message("Expected comma or generic closing got nothing.").ok());
                                         return None
                                     }
                                     let arg = self.parse_generic_argument(reporter, true);
@@ -489,6 +498,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
     // Ok(None) - no generic
     // Err(()) - failed to parse generic, but its supposed to be there
     pub fn parse_generic_argument(&mut self, reporter: &mut ErrorReporter, strict: bool) -> Result<Option<(TSpan<Expression>, bool)>, ()> {
+        debug!("Parsing generic");
         let curr = self.curr().unwrap();
         //DO NOT use peeking iterators
         let next_token = self.next_skip_ml_comment();
@@ -524,6 +534,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
             return Err(())
         }
         let next = next.unwrap();
+        debug!("Next token after generic arg expr {:?}", next.get_inner_ref());
         if next.get_inner() == Token::ANGLE_RIGHT || next.get_inner() == Token::COMMA { //100% generic as <IDENT> does not make sense
             if next.get_inner_ref() == &Token::COMMA {
                 self.set_index(seek);
@@ -534,12 +545,14 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
             reporter.add(WjlError::ast(next_token.start).message("Unexpected token in generic argument.").set_end_char(next_token.end).ok());
             return Err(())
         }
+        debug!("Stream delimited with < was not a generic.");
         //not a generic, discard the results TODO! save on parse time using symbol hashing and a cache (since we will obviously re-parse this expression later on if it aint a gen arg
         return Ok(None)
     }
 
     // expecting that we are on the use keyword
     pub fn parse_dep_import(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<DependencyImport>> {
+        debug!("Parsing dep import");
         let start = self.curr().unwrap();
         let next = self.next_skip_ml_comment();
         if next.is_none() {
@@ -570,6 +583,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
     }
     // expecting that we are on either an ident, a brace or a bracket
     pub fn parse_named_ref(&mut self, reporter: &mut ErrorReporter, allow_array: bool, allow_default: bool) -> Option<TSpan<NamedRef>> {
+        debug!("Parsing named ref");
         let next = self.curr().unwrap();
         let res = if next.get_inner_ref().is_ident() {
             let parsed = self.parse_qualified_ident(reporter, true)?;
@@ -601,6 +615,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
     }
 
     pub fn parse_until_um_brace_or_eof(&mut self, reporter: &mut ErrorReporter, require_brace_delim: bool) -> Option<Vec<Span>> {
+        debug!("Parsing generic stream");
         let mut stream = vec![];
         while let Some(span) = self.next_skip_ml_comment() {
             let tok = span.get_inner();
@@ -621,6 +636,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
             }
             if tok == Token::KEYWORD_USE {
                 let imp = self.parse_dep_import(reporter)?;
+                info!("Parsed import stmt {:?}", imp.get_inner_ref());
                 stream.push(imp.map(Ast::IMPORT));
                 continue
             }
@@ -663,6 +679,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
     }
     // assuming we are on the [
     pub fn parse_arr_expr(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<StaticExpr>> {
+        debug!("Parsing array expr");
         let start = self.curr().unwrap();
         let next = self.peek_next_skip_ml_comment().0;
         if next.is_none() {
@@ -708,6 +725,8 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
     }
 
     pub fn ecx_parse_w_preceeding_expr(&mut self, reporter: &mut ErrorReporter, expr: TSpan<Expression>) -> Option<TSpan<Expression>> {
+        debug!("Parsing expression with preceeding expression: {:?}", expr.get_inner_ref());
+        let seek_b = self.get_index().unwrap();
         let next = self.next_skip_ml_comment();
         if next.is_none() {
             let (start, end) = (expr.start, expr.end);
@@ -754,15 +773,17 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
                 right: Box::new(right),
             }).into_span(start, end))
         }
-
-        return None
+        self.set_index(seek_b);
+        return Some(expr)
     }
 
     pub fn parse_expr_func_call(&mut self, reporter: &mut ErrorReporter, reference: TSpan<Expression>) {
+        debug!("Parsing func call expr");
 
     }
     // expecting that we are on the paren
     pub fn parse_paren_func_call(&mut self, reporter: &mut ErrorReporter, reference: TSpan<Expression>) -> Option<TSpan<FunctionCallExpr>> {
+        debug!("Parsing paren func call");
         let start = reference.start;
         let paren = self.peek_next_skip_ml_comment().0;
         if paren.is_none() {
@@ -831,13 +852,13 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
     // expression kinds that we be parsing here:
     pub fn parse_expr(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<Expression>> {
         let start = self.curr().unwrap();
+        info!("Parsing expr from {:?}", start.get_inner_ref());
         let next = self.next_skip_ml_comment();
         if next.is_none() {
             reporter.add(WjlError::ast(start.end).message("Expected expression, got nothing.").ok());
             return None
         }
         let next = next.unwrap();
-
         let first_part = if next.get_inner_ref() == &Token::PAREN_LEFT {
             let wrapped = self.parse_expr(reporter)?;
             wrapped.map(|x| Expression::GROUPED(Box::new(x)))
@@ -875,6 +896,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
         } else { //TODO! bool invert expr somehow, make it fast
             todo!("{:?}", next)
         };
+        return Some(first_part);
         return None
     }
     // expecting we are before the annotation (on a colon in most cases)
@@ -886,6 +908,8 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
         // : <Ident>
         // : <Static>
     pub fn parse_type_annotation(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<Expression>> {
+        debug!("Parsing type annotation");
+
         let next = self.next_skip_ml_comment();
         if next.is_none() {
             reporter.add(WjlError::ast(self.peek_prev_skip_ml_comment().0.unwrap().end).message("Expected type annotation, got nothing.").ok());
@@ -928,6 +952,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
 
     // expecting that we are on the colon from where the constraint is expected
     pub fn parse_constraint(&mut self, reporter: &mut ErrorReporter, left: TSpan<Expression>) -> Option<TSpan<TypeConstraintExpr>> {
+        debug!("Parsing type constraint");
         let colon = self.curr().unwrap();
         let next = self.next_skip_ml_comment();
         if next.is_none() {
@@ -1013,6 +1038,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
 
     // expecting that we are on the question mark
     pub fn parse_ternary_expr(&mut self, reporter: &mut ErrorReporter, condition: TSpan<Expression>) -> Option<TSpan<TernaryExpr>> {
+        debug!("Parsing ternary expr");
         let left_expr = self.parse_expr(reporter)?;
         let next = self.next_skip_ml_comment();
         if next.is_none() {
