@@ -47,6 +47,7 @@ pub enum VisibilityScope {
 }
 
 
+
 #[derive(Clone, Debug)]
 pub struct VariableDeclaration {
     name: TSpan<NamedRef>,

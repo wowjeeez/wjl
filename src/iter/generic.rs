@@ -34,13 +34,14 @@ pub trait GenericIterator<T: Clone> {
     }
 }
 
-pub struct PeekableIterator<T> {
+pub struct PeekableIterator<T, E = ()> {
     inner: Vec<T>,
     index: Option<usize>,
-    collected: Vec<usize>
+    collected: Vec<usize>,
+    cache: Vec<E>
 }
 
-impl<T: Clone> GenericIterator<T> for PeekableIterator<T> {
+impl<T: Clone, E> GenericIterator<T> for PeekableIterator<T, E> {
     fn get_index(&self) -> Option<usize> {
         self.index
     }
@@ -54,15 +55,16 @@ impl<T: Clone> GenericIterator<T> for PeekableIterator<T> {
     }
 }
 
-pub fn wrap_iter<T>(elements: Vec<T>) -> PeekableIterator<T> {
+pub fn wrap_iter<T, E>(elements: Vec<T>) -> PeekableIterator<T, E> {
     PeekableIterator {
         inner: elements,
         index: None,
-        collected: vec![]
+        collected: vec![],
+        cache: vec![]
     }
 }
 
-impl <T: Clone> PeekableIterator<T> {
+impl <T: Clone, E: Clone> PeekableIterator<T, E> {
     pub fn collect_index(&mut self, index: usize) {
         self.collected.push(index)
     }
@@ -78,5 +80,13 @@ impl <T: Clone> PeekableIterator<T> {
             .collect::<Vec<T>>();
         self.clear_index_cache();
         coll
+    }
+    pub fn put_cache(&mut self, val: E) {
+        self.cache.push(val);
+    }
+    pub fn get_and_clear_cache(&mut self) -> Vec<E> {
+        let values = self.cache.clone();
+        self.cache.clear();
+        values
     }
 }

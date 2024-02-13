@@ -1,0 +1,15 @@
+use wjl::virtual::Virtual
+
+pure func sum(a: Int, b: Int) {
+    return a + b
+}
+
+pure func sumExpr(a: Int, b: Int) a + b
+
+// static dispatch extension
+pure func Array.truncate(to: Int) this[0..=to]
+
+
+//runtime dispatch
+@Virtual
+pure func Array.truncateVirtual(to: Int) this[0..=to]

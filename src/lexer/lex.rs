@@ -128,6 +128,7 @@ impl PeekableIterator<char> {
             "if" => Token::KEYWORD_IF,
             "else" => Token::KEYWORD_ELSE,
             "yield" => Token::KEYWORD_YIELD,
+            "pure" => Token::KEYWORD_PURE,
             "as" => Token::KEYWORD_AS,
             "true" => Token::KEYWORD_TRUE,
             "false" => Token::KEYWORD_FALSE,
@@ -611,6 +612,28 @@ pub fn lex_stream(input: &String, reporter: &mut ErrorReporter) -> Vec<Span> {
         }
         if tok == Token::SUBTRACT && next_tok == Token::SUBTRACT {
             push_t(Token::DECR);
+            continue
+        }
+        if tok == Token::PERIOD && next_tok == Token::PERIOD {
+            let n = iter.peek_n(2);
+            if n.is_none() {
+                push_t(Token::RANGE_OP);
+                continue
+            }
+            let n = n.unwrap();
+            if n == '=' {
+                iter.next();
+                iter.next();
+                stream.push(Token::INCL_RANGE_OP.span(start, start + 2));
+                continue
+            }
+            if n == '.' {
+                iter.next();
+                iter.next();
+                stream.push(Token::OP_SPREAD.span(start, start + 2));
+                continue
+            }
+            push_t(Token::RANGE_OP);
             continue
         }
 

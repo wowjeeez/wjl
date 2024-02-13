@@ -1,4 +1,5 @@
-use crate::ast::nodes::expression::{BinOp, BooleanExpression, ElvisExpr, Expression, FunctionCallExpr, LogExpr, ObjectLikeFieldDeclaration, StructDeclExpr, StructInitExpr, TernaryExpr, TypeConstraintExpr, TypeConstraintExprPart};
+use either::Either;
+use crate::ast::nodes::expression::{AppliedDecoratorExpr, BinOp, BooleanExpression, ElvisExpr, Expression, FunctionCallExpr, LogExpr, ObjectLikeFieldDeclaration, StructDeclExpr, StructInitExpr, TernaryExpr, TypeConstraintExpr, TypeConstraintExprPart};
 use crate::ast::nodes::qualified_ident::{Connector, GenericArgs, QualifiedIdent, QualifiedIdentPart};
 use crate::ast::nodes::statics::StaticExpr;
 use crate::ast::nodes::variable::{Assignment, DestructuringEntry, ModifiersAndDecorators, NamedRef, VariableDeclaration, VisibilityScope};
@@ -24,7 +25,8 @@ pub trait ToAst {
     fn into_ast(self, reporter: &mut ErrorReporter) -> Vec<Span>;
 }
 
-impl PeekableIterator<TokenSpan> {
+impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>> {
+
     pub fn next_if_skip_ml(&mut self, eq_tok: Token) -> Option<TokenSpan> {
         self.next_skip_ml_comment().map(|x| if x.get_inner() == eq_tok {
             Some(x)
@@ -334,69 +336,6 @@ impl PeekableIterator<TokenSpan> {
         reporter.add(WjlError::lex(next.start).message("Unexpected token").ok());
         return None
     }
-
-    pub fn reverse_collect_mod(&self, once_preceeding_decl: bool, reporter: &mut ErrorReporter) -> ModifiersAndDecorators {
-        let curr = self.get_index().unwrap();
-        let mut cloned = self.get_content().clone();
-        let mut sliced = &mut cloned[0..curr];
-        sliced.reverse();
-        let once_accessmod_or_ident = sliced.first();
-        if once_accessmod_or_ident.is_none() {
-            return ModifiersAndDecorators {
-                is_once: false,
-                visibility: VisibilityScope::PRIVATE
-            }
-        }
-        let mut once_accessmod_or_ident = once_accessmod_or_ident.unwrap();
-
-        let inner = once_accessmod_or_ident.get_inner();
-        let mut index = 1;
-        let is_once = if once_preceeding_decl && inner == Token::MOD_KEYWORD_ONCE {
-            let inner = sliced.get(index);
-            index += 1;
-            if inner.is_none() {
-                return ModifiersAndDecorators {
-                    visibility: VisibilityScope::PRIVATE,
-                    is_once: true
-                }
-            }
-            once_accessmod_or_ident = inner.unwrap();
-            true
-        } else if once_preceeding_decl {
-            false
-        } else if inner == Token::MOD_KEYWORD_ONCE {
-            reporter.add(WjlError::ast(once_accessmod_or_ident.start).set_end_char(once_accessmod_or_ident.end)
-                .message("Once can not appear here.").ok());
-            false
-        } else {false};
-
-        let visibility = if [Token::MOD_KEYWORD_INTERNAL, Token::MOD_KEYWORD_PROTECTED, Token::MOD_KEYWORD_PUBLIC, Token::MOD_KEYWORD_PRIVATE].contains(&inner) {
-            let scope = match inner {
-                Token::MOD_KEYWORD_INTERNAL => VisibilityScope::INTERNAL,
-                Token::MOD_KEYWORD_PROTECTED => VisibilityScope::PROTECTED,
-                Token::MOD_KEYWORD_PUBLIC => VisibilityScope::PUBLIC,
-                Token::MOD_KEYWORD_PRIVATE => VisibilityScope::PRIVATE,
-                _ => unreachable!()
-            };
-            let inner = sliced.get(index);
-            index += 1;
-            if inner.is_none() {
-                return ModifiersAndDecorators {
-                    visibility: scope,
-                    is_once
-                }
-            }
-            once_accessmod_or_ident = inner.unwrap();
-            scope
-        } else {VisibilityScope::PRIVATE};
-
-        return ModifiersAndDecorators {
-            is_once,
-            visibility
-        }
-
-    }
-
     // expecting that we are on the first ident
     pub fn parse_qualified_ident(&mut self, reporter: &mut ErrorReporter, treat_generics_as_decl: bool) -> Option<QualifiedIdent> {
         let first_ident = self.curr().unwrap();
@@ -596,8 +535,79 @@ impl PeekableIterator<TokenSpan> {
         //not a generic, discard the results TODO! save on parse time using symbol hashing and a cache (since we will obviously re-parse this expression later on if it aint a gen arg
         return Ok(None)
     }
-    //TODO! generic parse method synop: Vec<TokenSpan>::parse_until_um_brace_or_eof(&mut self, reporter: &mut ErrorReporter) -> Option<(Vec<Span>, bool)> where bool indicates if it was EOF or closed brace
+    pub fn parse_until_um_brace_or_eof(&mut self, reporter: &mut ErrorReporter, require_brace_delim: bool) -> Option<Vec<Span>> {
+        let mut stream = vec![];
+        while let Some(span) = self.next_skip_ml_comment() {
+            let tok = span.get_inner();
+            if tok == Token::AT {
+                let deco = self.parse_decorator(reporter)?;
+                self.put_cache(Either::Left(deco));
+                continue
+            }
+            if tok == Token::MOD_KEYWORD_INTERNAL ||
+                tok == Token::MOD_KEYWORD_PROTECTED ||
+                tok == Token::MOD_KEYWORD_PUBLIC ||
+                tok == Token::MOD_KEYWORD_PRIVATE ||
+                tok == Token::MOD_KEYWORD_ONCE ||
+                tok == Token::KEYWORD_DECORATOR ||
+                tok == Token::KEYWORD_PURE {
+                self.put_cache(Either::Right(span));
+                continue
+            }
+            //region: variable
+            if [KEYWORD_VAL, KEYWORD_VAR, KEYWORD_CONST].contains(&tok) {
+                let (decorators, access_mod, mods) = self.get_and_clear_cache().into_decorators_and_modifiers()?;
+                let decl_keyword_idx = self.get_index().unwrap();
+                let next = self.next_skip_ml_comment();
+                if next.is_none() {
+                    reporter.add(WjlError::ast(span.end).message("Expected variable name or destructuring expression, got nothing.").ok());
+                    break;
+                }
+                let next = next.unwrap();
 
+                let var_name = if next.get_inner_ref().is_ident() {
+                    let parsed = self.parse_qualified_ident(reporter, true)?;
+                    TSpan::wrap(0, 0, NamedRef {
+                        name: Some(parsed.unwrap()),
+                        is_array_destruct: false,
+                        is_object_destruct: false,
+                        entries: None,
+                    })
+                } else if next.get_inner() == Token::BRACE_LEFT {
+                    let parsed = self.parse_object_destruct_expr(reporter)?;
+                    parsed.unwrap()
+                } else if next.get_inner() == Token::BRACKET_LEFT {
+                    let parsed = self.parse_array_destruct_expr(reporter)?;
+                    parsed.unwrap()
+                } else {
+                    reporter.add(WjlError::ast(next.start).message(format!("Expected variable name or destructuring expression, got {}.", next.to_colored_str())).ok());
+                    break;
+                };
+                let next = self.next_skip_ml_comment();
+                if next.is_none() {
+                    reporter.add(WjlError::ast(var_name.start).set_end_char(var_name.end + 1).message("Expected initializer or type hint.").ok());
+                    break
+                }
+                let next = next.unwrap();
+                let needs_init = tok == KEYWORD_CONST || (tok == KEYWORD_VAL && !mods.is_once);
+                if next.get_inner() == Token::COLON {
+                    let type_hint = self.parse_type_annotation(reporter);
+                    //type hint
+                }
+                if next.get_inner() == Token::ASSIGN {
+                    let initializer = self.parse_expr(reporter);
+                    // init
+                }
+                if needs_init {
+                    reporter.add(WjlError::ast(var_name.start).set_end_char(var_name.end).message("Variable needs initializer").ok());
+                    break
+                }
+
+            }
+            //endregion
+        }
+        stream
+    }
     // assuming we are on the [
     pub fn parse_arr_expr(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<StaticExpr>> {
         let start = self.curr().unwrap();
@@ -644,7 +654,7 @@ impl PeekableIterator<TokenSpan> {
         return None
     }
 
-    pub fn ecx_parse_preceeding_expr(&mut self, reporter: &mut ErrorReporter, expr: TSpan<Expression>) -> Option<TSpan<Expression>> {
+    pub fn ecx_parse_w_preceeding_expr(&mut self, reporter: &mut ErrorReporter, expr: TSpan<Expression>) -> Option<TSpan<Expression>> {
         let next = self.next_skip_ml_comment();
         if next.is_none() {
             let (start, end) = (expr.start, expr.end);
@@ -655,7 +665,7 @@ impl PeekableIterator<TokenSpan> {
             return Some(self.parse_paren_func_call(reporter, expr)?.map(|x| Expression::FUNC_CALL(x)))
         }
         if next.get_inner_ref() == &Token::BRACE_LEFT {
-            return Some(self.parse_struct_init(reporter, expr)?.map(|x| Expression::STRUCT_INIT(x)))
+            return Some(self.parse_struct_init_or_code_block(reporter, expr)?.map(|x| Expression::STRUCT_INIT(x)))
         }
         if next.get_inner_ref() == &Token::PIPE_OP {
 
@@ -781,7 +791,7 @@ impl PeekableIterator<TokenSpan> {
         } else if next.get_inner().is_ident() {
             let ident = self.parse_qualified_ident(reporter, false)?;
             let (start, end) = (ident.start, ident.end);
-            let expr = self.ecx_parse_preceeding_expr(reporter, Expression::IDENT(ident).into_span(start, end))?;
+            let expr = self.ecx_parse_w_preceeding_expr(reporter, Expression::IDENT(ident).into_span(start, end))?;
             expr
         } else if next.get_inner_ref().is_static() {
             Expression::STATIC(next.get_inner().as_static_unchecked()).into_span(next.start, next.end)
@@ -994,8 +1004,8 @@ impl PeekableIterator<TokenSpan> {
         todo!()
     }
 
-    // expecting that we are on the type name
-    pub fn parse_struct_init(&mut self, reporter: &mut ErrorReporter, expr: TSpan<Expression>) -> Option<TSpan<StructInitExpr>> {
+    // expecting that we are on the left brace
+    pub fn parse_struct_init_or_code_block(&mut self, reporter: &mut ErrorReporter, expr: TSpan<Expression>) -> Option<TSpan<StructInitExpr>> {
         todo!()
     }
 
@@ -1004,6 +1014,7 @@ impl PeekableIterator<TokenSpan> {
         let kw = self.curr().unwrap();
         let struct_start = kw.start;
         let next = self.next_skip_ml_comment();
+        let modifiers = self.get_and_clear_cache();
         if next.is_none() {
             reporter.add(WjlError::ast(kw.end).message("Expected identifier, got nothing.").ok());
             return None
@@ -1155,74 +1166,65 @@ impl PeekableIterator<TokenSpan> {
     pub fn parse_yield_or_return(&mut self, reporter: &mut ErrorReporter)  -> Option<TSpan<Expression>> {
         todo!()
     }
+    pub fn parse_decorator(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<AppliedDecoratorExpr>> {
+
+    }
 }
 
 impl ToAst for Vec<TokenSpan> {
     fn into_ast(self, reporter: &mut ErrorReporter) -> Vec<Span> {
         let mut iter = wrap_iter(self);
-        let mut stream = vec![];
-        while let Some(span) = iter.next_skip_ml_comment() {
-            let tok = span.get_inner();
-            //region: variable
-            if [KEYWORD_VAL, KEYWORD_VAR, KEYWORD_CONST].contains(&tok) {
-                let preceeding_data = iter.reverse_collect_mod(KEYWORD_VAL == tok, reporter);
-                let decl_keyword_idx = iter.get_index().unwrap();
-                let next = iter.next_skip_ml_comment();
-                if next.is_none() {
-                    reporter.add(WjlError::ast(span.end).message("Expected variable name or destructuring expression, got nothing.").ok());
-                    break;
-                }
-                let next = next.unwrap();
+        iter.parse_until_um_brace_or_eof(reporter, false).unwrap_or(vec![])
+    }
+}
+pub struct Modifiers {
+    is_once: bool,
+    is_pure: bool,
+}
+trait IntoDecoratorsAndModifiers {
+    fn into_decorators_and_modifiers(self, reporter: &mut ErrorReporter) -> Option<(Vec<TSpan<AppliedDecoratorExpr>>, Vec<VisibilityScope>, Modifiers)>;
+}
 
-                let var_name = if let Token::IDENT(ident) = next.get_inner() {
-                    let parsed = iter.parse_qualified_ident(reporter, true);
-                    if parsed.is_none() {
-                        break
-                    }
-                    TSpan::wrap(0, 0, NamedRef {
-                        name: Some(parsed.unwrap()),
-                        is_array_destruct: false,
-                        is_object_destruct: false,
-                        entries: None,
-                    })
-                } else if next.get_inner() == Token::BRACE_LEFT {
-                    let parsed = iter.parse_object_destruct_expr(reporter);
-                    if parsed.is_none() {
-                        break;
-                    }
-                    parsed.unwrap()
-                } else if next.get_inner() == Token::BRACKET_LEFT {
-                    let parsed = iter.parse_array_destruct_expr(reporter);
-                    if parsed.is_none() {
-                        break;
-                    }
-                    parsed.unwrap()
-                } else {
-                    reporter.add(WjlError::ast(next.start).message(format!("Expected variable name or destructuring expression, got {}.", next.to_colored_str())).ok());
-                    break;
-                };
-                let next = iter.next_skip_ml_comment();
-                if next.is_none() {
-                    reporter.add(WjlError::ast(var_name.start).set_end_char(var_name.end + 1).message("Expected initializer or type hint.").ok());
-                    break
-                }
-                let next = next.unwrap();
-                let needs_init = tok == KEYWORD_CONST || (tok == KEYWORD_VAL && !preceeding_data.is_once);
-                if next.get_inner() == Token::COLON {
-                    //type hint
-                }
-                if next.get_inner() == Token::ASSIGN {
-                    let initializer = iter.parse_expr(reporter);
-                    // init
-                }
-                if needs_init {
-                    reporter.add(WjlError::ast(var_name.start).set_end_char(var_name.end).message("Variable needs initializer").ok());
-                    break
-                }
-
+impl IntoDecoratorsAndModifiers for  Vec<Either<TSpan<AppliedDecoratorExpr>, TokenSpan>> {
+    fn into_decorators_and_modifiers(self, repoter: &mut ErrorReporter) -> Option<(Vec<TSpan<AppliedDecoratorExpr>>, VisibilityScope, Modifiers)> {
+        let mut decos = vec![];
+        let mut visibility = VisibilityScope::PRIVATE;
+        let mut was_vis_set = false;
+        let mut mods = Modifiers {
+            is_pure: false,
+            is_once: false
+        };
+        for entry in self.into_iter() {
+            if entry.is_left() {
+                decos.push(entry.left().unwrap());
+                continue
             }
-            //endregion
+            let tok = entry.right().unwrap();
+            if [Token::MOD_KEYWORD_INTERNAL, Token::MOD_KEYWORD_PRIVATE, Token::MOD_KEYWORD_PUBLIC, Token::MOD_KEYWORD_PROTECTED].contains(tok.get_inner_ref()) {
+                if was_vis_set {
+                    repoter.add(WjlError::ast(tok.start).set_end_char(tok.end).message("Cannot have 2 access modifiers on 1 declaration.")
+                        .pot_fix("Remove the modifier.").ok());
+                    return None
+                }
+                visibility =  match tok.get_inner_ref() {
+                    Token::MOD_KEYWORD_PUBLIC => VisibilityScope::PUBLIC,
+                    Token::MOD_KEYWORD_PRIVATE => VisibilityScope::PRIVATE,
+                    Token::MOD_KEYWORD_PROTECTED => VisibilityScope::PROTECTED,
+                    Token::MOD_KEYWORD_INTERNAL => VisibilityScope::INTERNAL,
+                    _ => unreachable!()
+                };
+                was_vis_set = true;
+            }
+            if tok.get_inner_ref() == &Token::KEYWORD_PURE {
+                mods.is_pure = true;
+            }
+            if tok.get_inner_ref() == &Token::MOD_KEYWORD_ONCE {
+                mods.is_once = true;
+            }
+            repoter.add(WjlError::ast(tok.start).set_end_char(tok.end).message("Unexpected token. This is a mistake left by the authors, you should never encounter this error in normal circumstances. Please open a GitHub issue.").ok());
+            return None
         }
-        stream
+
+        return Some((decos, visibility, mods))
     }
 }

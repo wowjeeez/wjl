@@ -150,3 +150,8 @@ pub struct TypeConstraintExprPart {
     pub constraint: QualifiedIdent,
     pub next_join: Option<BinOp>
 }
+#[derive(Clone, Debug)]
+pub struct AppliedDecoratorExpr {
+    pub decorator: QualifiedIdent,
+    pub args: Option<Vec<Expression>> //None if the decorator is called like @Decorator
+}
