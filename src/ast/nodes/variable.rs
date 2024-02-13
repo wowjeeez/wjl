@@ -30,6 +30,13 @@ pub struct NamedRef {
     pub(crate) entries: Option<Vec<TSpan<DestructuringEntry>>>,
     pub(crate) name: Option<QualifiedIdent>,
 }
+
+impl NamedRef {
+    pub fn has_default(&self) -> bool {
+        if self.entries.is_none() {return false};
+        self.entries.as_ref().map_or(false, |x| x.iter().any(|x| x.get_inner_ref().default_value.is_some()))
+    }
+}
 #[derive(Clone, Debug)]
 pub struct DestructuringEntry {
     pub(crate) name: TSpan<NamedRef>,

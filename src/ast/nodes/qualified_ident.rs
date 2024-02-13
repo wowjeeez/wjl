@@ -25,6 +25,7 @@ pub struct QualifiedIdentPart {
 pub type QualifiedIdent = Span<Vec<Span<QualifiedIdentPart>>>;
 
 
+
 impl Span<Token> {
     pub fn as_qualified(&self) -> QualifiedIdent {
         let (content, is_b) = self.get_inner().get_ident_inner();
@@ -45,5 +46,12 @@ impl QualifiedIdent {
     }
     pub fn is_single_allow_gen(&self) -> bool {
         self.get_inner_ref().len() == 1
+    }
+    pub fn has_generic(&self) -> bool {
+        self.get_inner_ref().iter().any(|x| x.get_inner_ref().generic_args.is_some())
+    }
+    pub fn starts_with_str<T: Into<String>>(&self, with: T) -> bool {
+        let first = self.get_inner_ref().first();
+        first.map_or(false, |x| x.get_inner_ref().segment == with.into())
     }
 }

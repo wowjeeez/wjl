@@ -617,7 +617,8 @@ pub fn lex_stream(input: &String, reporter: &mut ErrorReporter) -> Vec<Span> {
         if tok == Token::PERIOD && next_tok == Token::PERIOD {
             let n = iter.peek_n(2);
             if n.is_none() {
-                push_t(Token::RANGE_OP);
+                iter.next();
+                stream.push(Token::RANGE_OP.span(start, start + 1));
                 continue
             }
             let n = n.unwrap();
@@ -633,7 +634,8 @@ pub fn lex_stream(input: &String, reporter: &mut ErrorReporter) -> Vec<Span> {
                 stream.push(Token::OP_SPREAD.span(start, start + 2));
                 continue
             }
-            push_t(Token::RANGE_OP);
+            iter.next();
+            stream.push(Token::RANGE_OP.span(start, start + 1));
             continue
         }
 
@@ -791,7 +793,10 @@ impl Span {
             Token::KEYWORD_FALSE => "false".red(),
             Token::KEYWORD_NULL => "null".red(),
             Token::EXP_NUMBER(n, is_b) => format!("[exponential: {}, is_bigint: {}]", n, is_b).red(),
-            Token::OP_ELVIS => ":?".green()
+            Token::OP_ELVIS => ":?".green(),
+            Token::KEYWORD_PURE => "pure".blue(),
+            Token::RANGE_OP => "..".green(),
+            Token::INCL_RANGE_OP => "..=".green()
         }
     }
 }

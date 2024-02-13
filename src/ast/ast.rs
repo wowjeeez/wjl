@@ -1,4 +1,5 @@
 use either::Either;
+use crate::ast::nodes::dependency::DependencyImport;
 use crate::ast::nodes::expression::{AppliedDecoratorExpr, BinOp, BooleanExpression, ElvisExpr, Expression, FunctionCallExpr, LogExpr, ObjectLikeFieldDeclaration, StructDeclExpr, StructInitExpr, TernaryExpr, TypeConstraintExpr, TypeConstraintExprPart};
 use crate::ast::nodes::qualified_ident::{Connector, GenericArgs, QualifiedIdent, QualifiedIdentPart};
 use crate::ast::nodes::statics::StaticExpr;
@@ -19,6 +20,7 @@ pub type Span = TSpan<Ast>;
 pub enum Ast {
     VAR_DECL(VariableDeclaration),
     ASSIGNMENT(Assignment),
+    IMPORT(DependencyImport)
 }
 
 pub trait ToAst {
@@ -535,6 +537,69 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
         //not a generic, discard the results TODO! save on parse time using symbol hashing and a cache (since we will obviously re-parse this expression later on if it aint a gen arg
         return Ok(None)
     }
+
+    // expecting that we are on the use keyword
+    pub fn parse_dep_import(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<DependencyImport>> {
+        let start = self.curr().unwrap();
+        let next = self.next_skip_ml_comment();
+        if next.is_none() {
+            reporter.add(WjlError::ast(self.peek_prev_skip_ml_comment().0.unwrap().end).message("Expected identifier, got nothing.").ok());
+            return None
+        }
+        let path = self.parse_qualified_ident(reporter, false)?;
+        if path.has_generic() {
+            reporter.add(WjlError::ast(path.start).set_end_char(path.end).message("Generics are not allowed in imports.").ok());
+            return None
+        }
+        let next = self.next_skip_ml_comment();
+        if next.as_ref().map_or(true, |x| x.get_inner_ref() == &Token::DELIMITER) {
+            let end = path.end;
+            return Some(DependencyImport {
+                is_js: path.starts_with_str("js"),
+                path,
+                receiver: None
+            }.into_span(start.start, end))
+        }
+        let receiver = self.parse_named_ref(reporter, false, false)?;
+        let end = receiver.end;
+        return Some(DependencyImport {
+            is_js: path.starts_with_str("js"),
+            path,
+            receiver: Some(receiver)
+        }.into_span(start.start, end))
+    }
+    // expecting that we are on either an ident, a brace or a bracket
+    pub fn parse_named_ref(&mut self, reporter: &mut ErrorReporter, allow_array: bool, allow_default: bool) -> Option<TSpan<NamedRef>> {
+        let next = self.curr().unwrap();
+        let res = if next.get_inner_ref().is_ident() {
+            let parsed = self.parse_qualified_ident(reporter, true)?;
+            Some(TSpan::wrap(0, 0, NamedRef {
+                name: Some(parsed),
+                is_array_destruct: false,
+                is_object_destruct: false,
+                entries: None,
+            }))
+        } else if next.get_inner() == Token::BRACE_LEFT {
+            let parsed = self.parse_object_destruct_expr(reporter)?;
+            Some(parsed)
+        } else if next.get_inner() == Token::BRACKET_LEFT {
+            if !allow_array {
+                reporter.add(WjlError::ast(next.start).message("Array destructuring is not allowed here.").ok());
+                return None
+            }
+            let parsed = self.parse_array_destruct_expr(reporter)?;
+            Some(parsed)
+        } else {
+            reporter.add(WjlError::ast(next.start).message(format!("Expected identifier or destructuring expression, got {}.", next.to_colored_str())).ok());
+            None
+        }?;
+        if !allow_default && res.get_inner_ref().has_default() {
+            reporter.add(WjlError::ast(res.start).set_end_char(res.end).message("Defaults are not allowed here.").ok());
+            return None
+        }
+        return Some(res)
+    }
+
     pub fn parse_until_um_brace_or_eof(&mut self, reporter: &mut ErrorReporter, require_brace_delim: bool) -> Option<Vec<Span>> {
         let mut stream = vec![];
         while let Some(span) = self.next_skip_ml_comment() {
@@ -554,9 +619,14 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
                 self.put_cache(Either::Right(span));
                 continue
             }
+            if tok == Token::KEYWORD_USE {
+                let imp = self.parse_dep_import(reporter)?;
+                stream.push(imp.map(|x| Ast::IMPORT(x)));
+                continue
+            }
             //region: variable
             if [KEYWORD_VAL, KEYWORD_VAR, KEYWORD_CONST].contains(&tok) {
-                let (decorators, access_mod, mods) = self.get_and_clear_cache().into_decorators_and_modifiers()?;
+                let (decorators, access_mod, mods) = self.get_and_clear_cache().into_decorators_and_modifiers(reporter)?;
                 let decl_keyword_idx = self.get_index().unwrap();
                 let next = self.next_skip_ml_comment();
                 if next.is_none() {
@@ -565,24 +635,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
                 }
                 let next = next.unwrap();
 
-                let var_name = if next.get_inner_ref().is_ident() {
-                    let parsed = self.parse_qualified_ident(reporter, true)?;
-                    TSpan::wrap(0, 0, NamedRef {
-                        name: Some(parsed.unwrap()),
-                        is_array_destruct: false,
-                        is_object_destruct: false,
-                        entries: None,
-                    })
-                } else if next.get_inner() == Token::BRACE_LEFT {
-                    let parsed = self.parse_object_destruct_expr(reporter)?;
-                    parsed.unwrap()
-                } else if next.get_inner() == Token::BRACKET_LEFT {
-                    let parsed = self.parse_array_destruct_expr(reporter)?;
-                    parsed.unwrap()
-                } else {
-                    reporter.add(WjlError::ast(next.start).message(format!("Expected variable name or destructuring expression, got {}.", next.to_colored_str())).ok());
-                    break;
-                };
+                let var_name = self.parse_named_ref(reporter, true, true)?;
                 let next = self.next_skip_ml_comment();
                 if next.is_none() {
                     reporter.add(WjlError::ast(var_name.start).set_end_char(var_name.end + 1).message("Expected initializer or type hint.").ok());
@@ -606,7 +659,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
             }
             //endregion
         }
-        stream
+        Some(stream)
     }
     // assuming we are on the [
     pub fn parse_arr_expr(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<StaticExpr>> {
@@ -1167,7 +1220,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
         todo!()
     }
     pub fn parse_decorator(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<AppliedDecoratorExpr>> {
-
+        todo!()
     }
 }
 
@@ -1182,7 +1235,7 @@ pub struct Modifiers {
     is_pure: bool,
 }
 trait IntoDecoratorsAndModifiers {
-    fn into_decorators_and_modifiers(self, reporter: &mut ErrorReporter) -> Option<(Vec<TSpan<AppliedDecoratorExpr>>, Vec<VisibilityScope>, Modifiers)>;
+    fn into_decorators_and_modifiers(self, reporter: &mut ErrorReporter) -> Option<(Vec<TSpan<AppliedDecoratorExpr>>, VisibilityScope, Modifiers)>;
 }
 
 impl IntoDecoratorsAndModifiers for  Vec<Either<TSpan<AppliedDecoratorExpr>, TokenSpan>> {
