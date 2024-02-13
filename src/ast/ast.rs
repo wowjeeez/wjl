@@ -621,7 +621,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
             }
             if tok == Token::KEYWORD_USE {
                 let imp = self.parse_dep_import(reporter)?;
-                stream.push(imp.map(|x| Ast::IMPORT(x)));
+                stream.push(imp.map(Ast::IMPORT));
                 continue
             }
             //region: variable
@@ -715,10 +715,10 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
         }
         let next = next.unwrap();
         if next.get_inner_ref() == &Token::PAREN_LEFT {
-            return Some(self.parse_paren_func_call(reporter, expr)?.map(|x| Expression::FUNC_CALL(x)))
+            return Some(self.parse_paren_func_call(reporter, expr)?.map(Expression::FUNC_CALL))
         }
         if next.get_inner_ref() == &Token::BRACE_LEFT {
-            return Some(self.parse_struct_init_or_code_block(reporter, expr)?.map(|x| Expression::STRUCT_INIT(x)))
+            return Some(self.parse_struct_init_or_code_block(reporter, expr)?.map(Expression::STRUCT_INIT))
         }
         if next.get_inner_ref() == &Token::PIPE_OP {
 
@@ -871,7 +871,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
         } else if next.get_inner_ref() == &Token::KEYWORD_FUNC {
             self.parse_func_decl(reporter)?
         } else if next.get_inner_ref() == &Token::BRACKET_LEFT {
-            self.parse_arr_expr(reporter)?.map(|x| Expression::STATIC(x))
+            self.parse_arr_expr(reporter)?.map(Expression::STATIC)
         } else { //TODO! bool invert expr somehow, make it fast
             todo!("{:?}", next)
         };
