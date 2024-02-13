@@ -573,7 +573,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
         let next = self.curr().unwrap();
         let res = if next.get_inner_ref().is_ident() {
             let parsed = self.parse_qualified_ident(reporter, true)?;
-            Some(TSpan::wrap(0, 0, NamedRef {
+            Some(TSpan::wrap(parsed.start, parsed.end, NamedRef {
                 name: Some(parsed),
                 is_array_destruct: false,
                 is_object_destruct: false,
