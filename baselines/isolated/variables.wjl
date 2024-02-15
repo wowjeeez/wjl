@@ -2,3 +2,4 @@ val test = 10 // works
 once val test2 // works
 const test: 10 = ident // works
 const fails: 10 = 10 // fails
+const fails2 = val

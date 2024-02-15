@@ -30,9 +30,9 @@ impl WjlError {
         } else {
             "ast" //TODO! more levels here as we proceed
         };
-        println!("(wjl/{}) {}: {}", comp.italic(), level, self.message.bold());
         let (line_start, char_start, end) = self.location;
-        println!("\tLocation: {}:{}:{}", file.blue(), line_start, char_start);
+        println!("(wjl/{}) {} in {}:{}:{}\n {}", comp.italic(), level, file.blue(), line_start, char_start, self.message.bold());
+        println!();
         let line = &lines.get(line_start - 1).unwrap();
         let line = fmt_line(&line, char_start);
         let prev_line = lines.get(line_start - 2);
