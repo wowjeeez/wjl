@@ -7,6 +7,8 @@ use crate::tokens::{IdentKind, Token};
 use either::Either;
 use std::fmt::Write;
 use colored::{ColoredString, Colorize};
+use tracing::instrument;
+
 type Span = GenericSpan<Token>;
 
 impl PeekableIterator<char> {
@@ -432,6 +434,7 @@ fn match_char(char: char) -> Token {
     }
 }
 
+#[instrument]
 pub fn lex_stream(input: &String, reporter: &mut ErrorReporter) -> Vec<Span> {
     let chars = input.chars().collect::<Vec<char>>();
     let mut iter = wrap_iter(chars);

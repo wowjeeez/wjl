@@ -13,3 +13,5 @@ pure func Array.truncate(to: Int) this[0..=to]
 //runtime dispatch
 @Virtual
 pure func Array.truncateVirtual(to: Int) this[0..=to]
+
+pure func Array::merge(a, b) [...a, ...b]

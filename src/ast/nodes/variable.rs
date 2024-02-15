@@ -1,7 +1,8 @@
 use crate::ast::ast::{Span};
-use crate::ast::nodes::expression::Expression;
+use crate::ast::nodes::expression::{AppliedDecoratorExpr, Expression};
 use crate::ast::nodes::qualified_ident::QualifiedIdent;
 use crate::tokens::span::Span as TSpan;
+use crate::tokens::Token;
 
 #[derive(Clone, Debug)]
 #[allow(non_camel_case_types, unused)]
@@ -11,6 +12,25 @@ pub enum VarDeclKind {
     VAR,
     ONCE_VAL
 }
+
+impl VarDeclKind {
+    pub fn parse_uc(tok: Token) -> VarDeclKind {
+        match tok {
+            Token::KEYWORD_CONST => VarDeclKind::CONST,
+            Token::KEYWORD_VAR => VarDeclKind::VAR,
+            Token::KEYWORD_VAL => VarDeclKind::VAL,
+            _ => unreachable!()
+        }
+    }
+
+    pub fn maybe_once(self, once: bool) -> VarDeclKind {
+        match self {
+            VarDeclKind::VAL if once => VarDeclKind::ONCE_VAL,
+            _ => self
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 #[allow(non_camel_case_types, unused)]
 pub enum AssignmentKind {
@@ -57,12 +77,13 @@ pub enum VisibilityScope {
 
 #[derive(Clone, Debug)]
 pub struct VariableDeclaration {
-    name: TSpan<NamedRef>,
-    is_backtick_name: Option<bool>,
-    kind: TSpan<VarDeclKind>,
-    type_hint: Option<Box<Span>>,
-    initializer: Box<Span>,
-    scoping: TSpan<VisibilityScope>
+    pub name: TSpan<NamedRef>,
+    pub kind: TSpan<VarDeclKind>,
+    pub type_hint: Option<Box<Span>>,
+    pub initializer: Option<Box<TSpan<Expression>>>,
+    pub scoping: VisibilityScope,
+    pub is_pure: bool,
+    pub decorators: Vec<TSpan<AppliedDecoratorExpr>>
 }
 
 #[derive(Clone, Debug)]

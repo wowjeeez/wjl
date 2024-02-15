@@ -1,17 +1,15 @@
-use std::hint::black_box;
-
 #[derive(Debug, Clone)]
 pub struct WjlError {
     pub char: usize,
     pub end_char: Option<usize>,
-    message: String,
-    fixes: Vec<String>,
-    level: ErrorLevel,
-    cause: Option<String>,
-    location: (usize, usize, Option<(usize, usize)>),
-    is_from_lex: bool
+    pub message: String,
+    pub fixes: Vec<String>,
+    pub level: ErrorLevel,
+    pub cause: Option<String>,
+    pub location: (usize, usize, Option<(usize, usize)>),
+    pub is_from_lex: bool
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ErrorLevel {
     WARN,
     ERROR,
