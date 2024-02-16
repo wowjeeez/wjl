@@ -46,7 +46,16 @@ impl WjlError {
         }
         let line_data = format!("[{}]: ", line_start);
         println!("{}{}", line_data, line.bold());
-        println!("{}", "^ ".pad_to_width_with_alignment(line.len() + line_data.len(), Alignment::Right).yellow());
+        if self.end_char.is_some() {
+            let (end_line, end_char) = self.location.2.unwrap();
+            if end_line == line_start {
+                println!("{}", "^".repeat(end_char - char_start).pad_to_width_with_alignment(line.len() + line_data.len(), Alignment::Right).yellow())
+            } else {
+                todo!()
+            }
+        } else {
+            println!("{}", "^ ".pad_to_width_with_alignment(line.len() + line_data.len(), Alignment::Right).yellow());
+        }
         if next_line.is_some() {
             println!("[{}]: {}", line_start + 1, next_line.unwrap());
         }
