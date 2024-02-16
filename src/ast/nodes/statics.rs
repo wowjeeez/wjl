@@ -19,12 +19,12 @@ pub enum StaticExpr {
     EXP(String, bool),
     BIN(String, bool),
     OCT(String, bool),
-    ARR(Vec<Span<Expression>>)
+    ARR(Vec<Span<Expression>>),
 }
 #[derive(Debug, Clone)]
 struct StringTemplate {
     pub raw: Vec<Option<String>>,
-    pub expressions: Vec<Option<Span<Expression>>>
+    pub expressions: Vec<Option<Span<Expression>>>,
 }
 
 impl Token {
@@ -40,9 +40,13 @@ impl Token {
             Token::KEYWORD_TRUE => StaticExpr::TRUE,
             Token::KEYWORD_FALSE => StaticExpr::FALSE,
             Token::KEYWORD_NULL => StaticExpr::NULL,
-            Token::LITERAL_DOUBLE(inner) => StaticExpr::STRING_DOUBLE(inner.as_expr_or_str_branch(reporter)?),
-            Token::LITERAL_SINGLE(inner) => StaticExpr::STRING_SINGLE(inner.as_expr_or_str_branch(reporter)?),
-            _ => unreachable!()
+            Token::LITERAL_DOUBLE(inner) => {
+                StaticExpr::STRING_DOUBLE(inner.as_expr_or_str_branch(reporter)?)
+            }
+            Token::LITERAL_SINGLE(inner) => {
+                StaticExpr::STRING_SINGLE(inner.as_expr_or_str_branch(reporter)?)
+            }
+            _ => unreachable!(),
         })
     }
 }
@@ -61,16 +65,13 @@ impl AsExpressionBranch for Literal {
                 let mut iter = wrap_iter(uw);
                 let expr = iter.parse_expr(reporter)?;
                 expressions.push(Some(expr));
-                continue
+                continue;
             }
             if elem.is_left() {
                 let uw = elem.as_ref().unwrap_left();
                 raw.push(Some(uw.clone()));
             }
         }
-        Some(StringTemplate {
-            raw,
-            expressions,
-        })
+        Some(StringTemplate { raw, expressions })
     }
 }

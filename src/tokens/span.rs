@@ -1,6 +1,6 @@
-use std::fmt::Debug;
-use crate::tokens::IdentKind;
 use crate::tokens::tokens::Token;
+use crate::tokens::IdentKind;
+use std::fmt::Debug;
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub struct Span<T: Clone + Debug> {
@@ -25,7 +25,7 @@ impl Token {
     pub fn is_ident(&self) -> bool {
         match self {
             Token::IDENT(_) => true,
-            _ => false
+            _ => false,
         }
     }
 
@@ -35,16 +35,20 @@ impl Token {
                 IdentKind::DEFAULT(inner) => (inner.clone(), false),
                 IdentKind::BACKTICK(inner) => (inner.clone(), true),
             },
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 
     pub fn is_static(&self) -> bool {
-        match self  {
+        match self {
             Token::LITERAL_SINGLE(_) | Token::LITERAL_DOUBLE(_) => true,
-            Token::HEX_NUMBER(_, _) | Token::BINARY_NUMBER(_, _) | Token::OCTAL_NUMBER(_, _) | Token::INT(_, _) | Token::FLOAT(_) => true,
+            Token::HEX_NUMBER(_, _)
+            | Token::BINARY_NUMBER(_, _)
+            | Token::OCTAL_NUMBER(_, _)
+            | Token::INT(_, _)
+            | Token::FLOAT(_) => true,
             Token::KEYWORD_TRUE | Token::KEYWORD_FALSE | Token::KEYWORD_NULL => true,
-            _ => false
+            _ => false,
         }
     }
 }
@@ -60,7 +64,7 @@ impl<T: Clone + Debug> Span<T> {
         Span {
             inner: with,
             start,
-            end
+            end,
         }
     }
     pub fn map<R: Clone + Debug, F: FnOnce(T) -> R>(self, func: F) -> Span<R> {
@@ -73,8 +77,10 @@ pub trait IntoSpan<T: Clone + Debug> {
     fn into_span(self, start: usize, end: usize) -> Span<T>;
 }
 
-impl <T> IntoSpan<T> for T
-where T: Clone + Debug {
+impl<T> IntoSpan<T> for T
+where
+    T: Clone + Debug,
+{
     fn to_span(&self, start: usize, end: usize) -> Span<T> {
         Span::wrap(start, end, self.clone())
     }

@@ -1,3 +1,1 @@
-pub struct GenericArgument {
-    
-}
+pub struct GenericArgument {}

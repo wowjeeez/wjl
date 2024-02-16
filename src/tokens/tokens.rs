@@ -11,7 +11,7 @@ impl IdentKind {
     pub fn get_text(&self) -> String {
         match self {
             IdentKind::DEFAULT(i) => i.clone(),
-            IdentKind::BACKTICK(i) => i.clone()
+            IdentKind::BACKTICK(i) => i.clone(),
         }
     }
 
@@ -136,21 +136,30 @@ pub enum Token {
     COMMENT(String),
     COMMENT_ML(Vec<String>),
     NONCE,
-    OP_ELVIS
+    OP_ELVIS,
 }
-
 
 impl Token {
     pub fn is_math(&self) -> bool {
         match self {
-            Token::SUM | Token::SUBTRACT | Token::DIV | Token::MUL | Token::MOD | Token::BIT_NOT | Token::BIT_AND | Token::BIT_XOR | Token::BIT_S_RIGHT_SHIFT | Token::BIT_ZERO_FILL_RIGHT_SHIFT | Token::BIT_ZERO_FILL_LEFT_SHIFT => true,
-            _ => false
+            Token::SUM
+            | Token::SUBTRACT
+            | Token::DIV
+            | Token::MUL
+            | Token::MOD
+            | Token::BIT_NOT
+            | Token::BIT_AND
+            | Token::BIT_XOR
+            | Token::BIT_S_RIGHT_SHIFT
+            | Token::BIT_ZERO_FILL_RIGHT_SHIFT
+            | Token::BIT_ZERO_FILL_LEFT_SHIFT => true,
+            _ => false,
         }
     }
     pub fn is_binop(&self) -> bool {
         match self {
             Token::OR | Token::AND => true,
-            _ => false
+            _ => false,
         }
     }
 }

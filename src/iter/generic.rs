@@ -38,7 +38,7 @@ pub struct PeekableIterator<T, E = ()> {
     inner: Vec<T>,
     index: Option<usize>,
     collected: Vec<usize>,
-    cache: Vec<E>
+    cache: Vec<E>,
 }
 
 impl<T: Clone, E> GenericIterator<T> for PeekableIterator<T, E> {
@@ -60,11 +60,11 @@ pub fn wrap_iter<T, E>(elements: Vec<T>) -> PeekableIterator<T, E> {
         inner: elements,
         index: None,
         collected: vec![],
-        cache: vec![]
+        cache: vec![],
     }
 }
 
-impl <T: Clone, E: Clone> PeekableIterator<T, E> {
+impl<T: Clone, E: Clone> PeekableIterator<T, E> {
     pub fn collect_index(&mut self, index: usize) {
         self.collected.push(index)
     }
@@ -72,10 +72,19 @@ impl <T: Clone, E: Clone> PeekableIterator<T, E> {
         self.collected.clear();
     }
     pub fn free_index(&mut self, index: usize) {
-        self.collected = self.collected.clone().into_iter().filter(|x| x != &index).collect();
+        self.collected = self
+            .collected
+            .clone()
+            .into_iter()
+            .filter(|x| x != &index)
+            .collect();
     }
     pub fn get_collected_and_clear(&mut self) -> Vec<T> {
-        let coll = self.get_content().iter().enumerate().filter(|(x, _)| self.collected.contains(x))
+        let coll = self
+            .get_content()
+            .iter()
+            .enumerate()
+            .filter(|(x, _)| self.collected.contains(x))
             .map(|(_, t)| t.clone())
             .collect::<Vec<T>>();
         self.clear_index_cache();

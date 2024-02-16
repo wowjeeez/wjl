@@ -1,18 +1,23 @@
 use crate::errors::{ErrorReporter, WjlError};
-use crate::helpers::{Print, treat_as_bigint};
+use crate::helpers::{treat_as_bigint, Print};
 use crate::iter::{wrap_iter, GenericIterator, PeekableIterator};
 use crate::tokens::span::{IntoSpan, Span as GenericSpan};
 use crate::tokens::Token::{LITERAL_DOUBLE, LITERAL_SINGLE};
 use crate::tokens::{IdentKind, Token};
+use colored::{ColoredString, Colorize};
 use either::Either;
 use std::fmt::Write;
-use colored::{ColoredString, Colorize};
 use tracing::instrument;
 
 type Span = GenericSpan<Token>;
 
 impl PeekableIterator<char> {
-    pub fn pull_literal(&mut self, matcher: char, reporter: &mut ErrorReporter, disallow_template: bool) -> Vec<Either<String, Vec<Span>>> {
+    pub fn pull_literal(
+        &mut self,
+        matcher: char,
+        reporter: &mut ErrorReporter,
+        disallow_template: bool,
+    ) -> Vec<Either<String, Vec<Span>>> {
         let mut content: String = String::new();
         let mut segments = vec![];
         let mut delim_found = false;
@@ -23,10 +28,14 @@ impl PeekableIterator<char> {
                 delim_found = true;
                 break;
             }
-            if char == '$' &&!is_prev_esc {
+            if char == '$' && !is_prev_esc {
                 if disallow_template {
-                    reporter.add(WjlError::lex(self.get_index().unwrap()).message("Template literals are not allowed here.").ok());
-                    break
+                    reporter.add(
+                        WjlError::lex(self.get_index().unwrap())
+                            .message("Template literals are not allowed here.")
+                            .ok(),
+                    );
+                    break;
                 }
                 let next = self.next();
                 if !next.is_none() {
@@ -37,8 +46,10 @@ impl PeekableIterator<char> {
                         let ident_start = self.get_index().unwrap();
                         let ident = self.pull_ident();
                         let end = self.get_index().unwrap();
-                        segments.push(Either::Right(vec![Token::IDENT(IdentKind::DEFAULT(ident)).into_span(ident_start, end)]));
-                        continue
+                        segments.push(Either::Right(vec![
+                            Token::IDENT(IdentKind::DEFAULT(ident)).into_span(ident_start, end)
+                        ]));
+                        continue;
                     }
                     if next == '{' {
                         let mut inner_tok_stream = vec![];
@@ -46,15 +57,19 @@ impl PeekableIterator<char> {
                         let ident_base = self.get_index().unwrap() + 1;
                         'inner: while let next = self.next() {
                             if next.is_none() {
-                                reporter.add(WjlError::lex(self.get_index().unwrap() - 1).message("Unclosed template literal delimiter").ok());
-                                break
+                                reporter.add(
+                                    WjlError::lex(self.get_index().unwrap() - 1)
+                                        .message("Unclosed template literal delimiter")
+                                        .ok(),
+                                );
+                                break;
                             }
                             let next = next.unwrap();
                             if next == '{' {
                                 um_depth += 1;
                             }
                             if next == '}' && um_depth == 0 {
-                                break 'inner
+                                break 'inner;
                             }
                             if next == '}' {
                                 um_depth -= 1;
@@ -63,18 +78,29 @@ impl PeekableIterator<char> {
                         }
                         let orig_rep = reporter.errors.len();
 
-                        let token_stream = lex_stream(&inner_tok_stream.into_iter().collect::<String>(), reporter).into_iter()
-                            .map(|x| x.get_inner().into_span(x.start + ident_base, x.end + 1 + ident_base)).collect::<Vec<Span>>();
+                        let token_stream =
+                            lex_stream(&inner_tok_stream.into_iter().collect::<String>(), reporter)
+                                .into_iter()
+                                .map(|x| {
+                                    x.get_inner()
+                                        .into_span(x.start + ident_base, x.end + 1 + ident_base)
+                                })
+                                .collect::<Vec<Span>>();
                         if reporter.errors.len() != orig_rep {
-                            break
+                            break;
                         }
                         segments.push(Either::Left(content.clone()));
                         content.clear();
                         segments.push(Either::Right(token_stream));
-                        continue
+                        continue;
                     }
-                    reporter.add(WjlError::lex(self.get_index().unwrap()).message("Invalid character after literal").pot_fix("Escape the $.").ok());
-                    break
+                    reporter.add(
+                        WjlError::lex(self.get_index().unwrap())
+                            .message("Invalid character after literal")
+                            .pot_fix("Escape the $.")
+                            .ok(),
+                    );
+                    break;
                 }
             }
             content
@@ -285,7 +311,7 @@ impl PeekableIterator<char> {
         while let mut char = self.next() {
             if char.is_none() {
                 finalize!();
-                break
+                break;
             }
             let char = char.unwrap();
             if char.is_digit(10) {
@@ -378,10 +404,13 @@ impl PeekableIterator<char> {
             if treat_as_bigint(&buf, 8) {
                 stream.push(Token::OCTAL_NUMBER(buf, true).span(start, self.get_index().unwrap()));
             } else {
-                reporter.add(WjlError::lex(start)
-                    .set_end_char(self.get_index().unwrap())
-                    .cause(i64_res.err().unwrap().to_string())
-                    .message("Failed to parse octal integer.").ok());
+                reporter.add(
+                    WjlError::lex(start)
+                        .set_end_char(self.get_index().unwrap())
+                        .cause(i64_res.err().unwrap().to_string())
+                        .message("Failed to parse octal integer.")
+                        .ok(),
+                );
             }
             return;
         }
@@ -410,10 +439,13 @@ impl PeekableIterator<char> {
             if treat_as_bigint(&buf, 16) {
                 stream.push(Token::HEX_NUMBER(buf, true).span(start, self.get_index().unwrap()));
             } else {
-                reporter.add(WjlError::lex(start)
-                    .set_end_char(self.get_index().unwrap())
-                    .cause(i64_res.err().unwrap().to_string())
-                    .message("Failed to parse hex integer.").ok());
+                reporter.add(
+                    WjlError::lex(start)
+                        .set_end_char(self.get_index().unwrap())
+                        .cause(i64_res.err().unwrap().to_string())
+                        .message("Failed to parse hex integer.")
+                        .ok(),
+                );
             }
             return;
         }
@@ -455,10 +487,13 @@ impl PeekableIterator<char> {
             if treat_as_bigint(&buf, 2) {
                 stream.push(Token::BINARY_NUMBER(buf, true).span(start, self.get_index().unwrap()));
             } else {
-                reporter.add(WjlError::lex(start)
-                    .set_end_char(self.get_index().unwrap())
-                    .cause(i64_res.err().unwrap().to_string())
-                    .message("Failed to parse binary integer.").ok());
+                reporter.add(
+                    WjlError::lex(start)
+                        .set_end_char(self.get_index().unwrap())
+                        .cause(i64_res.err().unwrap().to_string())
+                        .message("Failed to parse binary integer.")
+                        .ok(),
+                );
             }
             return;
         }
@@ -528,12 +563,17 @@ pub fn lex_stream(input: &String, reporter: &mut ErrorReporter) -> Vec<Span> {
                 iter.next();
                 'inner: while let Some(next) = iter.next() {
                     if next as u8 == 0x0A {
-                        break 'inner
+                        break 'inner;
                     }
-                    comment_content.write_char(next).expect("Failed to write char");
+                    comment_content
+                        .write_char(next)
+                        .expect("Failed to write char");
                 }
-                stream.push(Token::COMMENT(comment_content.trim().to_string()).span(start, iter.get_index().unwrap()));
-                continue
+                stream.push(
+                    Token::COMMENT(comment_content.trim().to_string())
+                        .span(start, iter.get_index().unwrap()),
+                );
+                continue;
             } else if next.map_or(false, |x| x == '*').eq(&true) {
                 let start = iter.get_index().unwrap();
                 iter.next();
@@ -543,21 +583,22 @@ pub fn lex_stream(input: &String, reporter: &mut ErrorReporter) -> Vec<Span> {
                     if next as u8 == 0x0A {
                         lines.push(line.trim().to_string());
                         line.clear();
-                        continue
+                        continue;
                     }
                     if next == '*' && iter.peek_next().map_or(true, |x| x == '/').eq(&true) {
                         lines.push(line.trim().to_string());
                         line.clear();
                         iter.next();
-                        break
+                        break;
                     }
-                    line.write_char(next).expect("Failed to write char into buf");
+                    line.write_char(next)
+                        .expect("Failed to write char into buf");
                 }
                 let end = iter.get_index().unwrap();
                 stream.push(Token::COMMENT_ML(lines).span(start, end));
-                continue
+                continue;
             }
-            continue
+            continue;
         }
         if char == '"' {
             let curr = iter.get_index().unwrap();
@@ -587,7 +628,7 @@ pub fn lex_stream(input: &String, reporter: &mut ErrorReporter) -> Vec<Span> {
         let next_tok = iter.peek_next();
         let start = iter.get_index().unwrap();
         if next_tok.is_none() {
-             continue
+            continue;
         }
         let next_tok = next_tok.unwrap();
         if tok == Token::COLON && next_tok == '3' {
@@ -597,17 +638,21 @@ pub fn lex_stream(input: &String, reporter: &mut ErrorReporter) -> Vec<Span> {
         if tok == Token::DOLLAR {
             let next = iter.peek_next();
             if next.is_none() {
-                stream.push(Token::IDENT(IdentKind::DEFAULT("$".to_string())).into_span(start, start));
-                continue
+                stream.push(
+                    Token::IDENT(IdentKind::DEFAULT("$".to_string())).into_span(start, start),
+                );
+                continue;
             }
             let next = next.unwrap();
             if next.is_alphabetic() {
                 let ident = iter.pull_ident();
                 stream.push(Token::LABEL(ident).into_span(start, iter.get_index().unwrap()));
-                continue
+                continue;
             } else {
-                stream.push(Token::IDENT(IdentKind::DEFAULT("$".to_string())).into_span(start, start));
-                continue
+                stream.push(
+                    Token::IDENT(IdentKind::DEFAULT("$".to_string())).into_span(start, start),
+                );
+                continue;
             }
         }
 
@@ -618,139 +663,150 @@ pub fn lex_stream(input: &String, reporter: &mut ErrorReporter) -> Vec<Span> {
 
         if tok == Token::PIPE && next_tok == Token::PIPE {
             push_t(Token::OR);
-            continue
+            continue;
         }
         if tok == Token::PIPE && next_tok == Token::ANGLE_RIGHT {
             push_t(Token::PIPE_OP);
-            continue
+            continue;
         }
         if tok == Token::ANGLE_LEFT && next_tok == Token::ASSIGN {
             push_t(Token::RIGHT_GTE);
-            continue
+            continue;
         }
         if tok == Token::ANGLE_RIGHT && next_tok == Token::ASSIGN {
             push_t(Token::LEFT_GTE);
-            continue
+            continue;
         }
         if tok == Token::ASSIGN && next_tok == Token::ASSIGN {
             push_t(Token::EQ);
-            continue
+            continue;
         }
         if tok == Token::EXCL_MARK && next_tok == Token::ASSIGN {
             push_t(Token::N_EQ);
-            continue
+            continue;
         }
         if tok == Token::MUL && next_tok == Token::ASSIGN {
             push_t(Token::ASSIGN_MUL);
-            continue
+            continue;
         }
         if tok == Token::SUM && next_tok == Token::ASSIGN {
             push_t(Token::ASSIGN_SUM);
-            continue
+            continue;
         }
         if tok == Token::DIV && next_tok == Token::ASSIGN {
             push_t(Token::ASSIGN_DIV);
-            continue
+            continue;
         }
         if tok == Token::MOD && next_tok == Token::ASSIGN {
             push_t(Token::ASSIGN_MOD);
-            continue
+            continue;
         }
         if tok == Token::SUBTRACT && next_tok == Token::ASSIGN {
             push_t(Token::ASSIGN_SUB);
-            continue
+            continue;
         }
         if tok == Token::COLON && next_tok == Token::COLON {
             push_t(Token::DOUBLE_COLON);
-            continue
+            continue;
         }
         if tok == Token::BIT_AND && next_tok == Token::BIT_AND {
             push_t(Token::AND);
-            continue
+            continue;
         }
         if tok == Token::ANGLE_LEFT && next_tok == Token::ANGLE_LEFT {
             push_t(Token::BIT_ZERO_FILL_LEFT_SHIFT);
-            continue
+            continue;
         }
         if tok == Token::ANGLE_RIGHT && next_tok == Token::ANGLE_RIGHT {
             push_t(Token::BIT_S_RIGHT_SHIFT);
-            continue
+            continue;
         }
         if tok == Token::ASSIGN && next_tok == Token::ANGLE_RIGHT {
             push_t(Token::ARROW);
-            continue
+            continue;
         }
         if tok == Token::COLON && next_tok == Token::QMARK {
             push_t(Token::OP_ELVIS);
-            continue
+            continue;
         }
 
         if tok == Token::PIPE && next_tok == Token::ANGLE_RIGHT {
             push_t(Token::PIPE_OP);
-            continue
+            continue;
         }
         if tok == Token::SUM && next_tok == Token::SUM {
             push_t(Token::INCR);
-            continue
+            continue;
         }
         if tok == Token::SUBTRACT && next_tok == Token::SUBTRACT {
             push_t(Token::DECR);
-            continue
+            continue;
         }
         if tok == Token::PERIOD && next_tok == Token::PERIOD {
             let n = iter.peek_n(2);
             if n.is_none() {
                 iter.next();
                 stream.push(Token::RANGE_OP.span(start, start + 1));
-                continue
+                continue;
             }
             let n = n.unwrap();
             if n == '=' {
                 iter.next();
                 iter.next();
                 stream.push(Token::INCL_RANGE_OP.span(start, start + 2));
-                continue
+                continue;
             }
             if n == '.' {
                 iter.next();
                 iter.next();
                 stream.push(Token::OP_SPREAD.span(start, start + 2));
-                continue
+                continue;
             }
             iter.next();
             stream.push(Token::RANGE_OP.span(start, start + 1));
-            continue
+            continue;
         }
 
-        if tok == Token::ANGLE_LEFT && next_tok == Token::ANGLE_LEFT && iter.peek_n(2).map_or(false, |x| x == '>') {
+        if tok == Token::ANGLE_LEFT
+            && next_tok == Token::ANGLE_LEFT
+            && iter.peek_n(2).map_or(false, |x| x == '>')
+        {
             iter.next();
             iter.next(); //drop last >
             stream.push(Token::BIT_ZERO_FILL_RIGHT_SHIFT.span(start, start + 2));
-            continue
+            continue;
         }
-        if tok == Token::AT && next_tok == Token::AT && iter.peek_n(2).map_or(false, |x| x.is_valid_ident_start() && x != '`') {
+        if tok == Token::AT
+            && next_tok == Token::AT
+            && iter
+                .peek_n(2)
+                .map_or(false, |x| x.is_valid_ident_start() && x != '`')
+        {
             iter.next(); //drop second @
             iter.next(); //cycle to ident start
             let ident = iter.pull_ident();
             if ident == "wjl_internal".to_string() {
                 stream.push(Token::WJL_COMPILER_PLACEHOLDER.span(start, iter.get_index().unwrap()));
-                continue
+                continue;
             }
             iter.seek(-2);
         }
 
-
         if tok != Token::NONCE {
             stream.push(tok.span(start, start));
-            continue
+            continue;
         }
         if char.is_whitespace() {
             if char as u8 == 0x0A {
                 stream.push(Token::DELIMITER.span(start, start));
             }
-            continue
+            continue;
         }
-        reporter.add(WjlError::lex(start).message(format!("Unexpected character: {}", char)).ok());
+        reporter.add(
+            WjlError::lex(start)
+                .message(format!("Unexpected character: {}", char))
+                .ok(),
+        );
     }
     stream
 }
@@ -764,7 +820,6 @@ impl IsValidIdentStart for char {
         self.is_alphabetic() || self == &'_' || self == &'`'
     }
 }
-
 
 impl Span {
     pub fn to_colored_str(&self) -> ColoredString {
@@ -844,7 +899,7 @@ impl Span {
             Token::OP_SPREAD => "...".red(),
             Token::IDENT(kind) => match kind {
                 IdentKind::DEFAULT(content) => format!("[IDENT_DEFAULT: {}]", content).red(),
-                IdentKind::BACKTICK(content) => format!("[IDENT_BACKTICK: {}]", content).red()
+                IdentKind::BACKTICK(content) => format!("[IDENT_BACKTICK: {}]", content).red(),
             },
             Token::ASSIGN => "=".green(),
             Token::ASSIGN_SUM => "+=".green(),
@@ -864,9 +919,15 @@ impl Span {
             Token::PIPE_OP => "|>".yellow(),
             Token::FLOAT(f) => format!("[float: {}]", f).red(),
             Token::INT(int, bigint) => format!("[int: {}, is_bigint: {}]", int, bigint).red(),
-            Token::BINARY_NUMBER(int, bigint) => format!("[binary: {}, is_bigint: {}]", int, bigint).red(),
-            Token::OCTAL_NUMBER(int, bigint) => format!("[octal: {}, is_bigint: {}]", int, bigint).red(),
-            Token::HEX_NUMBER(int, bigint) => format!("[hex: {}, is_bigint: {}]", int, bigint).red(),
+            Token::BINARY_NUMBER(int, bigint) => {
+                format!("[binary: {}, is_bigint: {}]", int, bigint).red()
+            }
+            Token::OCTAL_NUMBER(int, bigint) => {
+                format!("[octal: {}, is_bigint: {}]", int, bigint).red()
+            }
+            Token::HEX_NUMBER(int, bigint) => {
+                format!("[hex: {}, is_bigint: {}]", int, bigint).red()
+            }
             Token::NONCE => "<<NONCE>>".black(),
             Token::COMMENT(inner) => format!("[comment: {}]", inner).red(),
             Token::COMMENT_ML(inner) => format!("[ml_comment: {:?}]", inner).red(),
@@ -875,13 +936,15 @@ impl Span {
             Token::KEYWORD_TRUE => "true".red(),
             Token::KEYWORD_FALSE => "false".red(),
             Token::KEYWORD_NULL => "null".red(),
-            Token::EXP_NUMBER(n, is_b) => format!("[exponential: {}, is_bigint: {}]", n, is_b).red(),
+            Token::EXP_NUMBER(n, is_b) => {
+                format!("[exponential: {}, is_bigint: {}]", n, is_b).red()
+            }
             Token::OP_ELVIS => ":?".green(),
             Token::KEYWORD_PURE => "pure".blue(),
             Token::RANGE_OP => "..".green(),
             Token::DOLLAR => "$".green(),
             Token::INCL_RANGE_OP => "..=".green(),
-            Token::LABEL(lb) => format!("[label: {}]", lb).red()
+            Token::LABEL(lb) => format!("[label: {}]", lb).red(),
         }
     }
 }
@@ -900,6 +963,8 @@ pub trait PullRawString {
 }
 impl PullRawString for Vec<Either<String, Vec<Span>>> {
     fn pull_raw_string(self) -> String {
-        self.into_iter().map(|x| x.left().unwrap()).collect::<String>()
+        self.into_iter()
+            .map(|x| x.left().unwrap())
+            .collect::<String>()
     }
 }

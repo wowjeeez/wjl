@@ -1,6 +1,6 @@
-pub mod variable;
-pub mod qualified_ident;
-pub mod generic_argument;
-pub mod statics;
-pub mod expression;
 pub mod dependency;
+pub mod expression;
+pub mod generic_argument;
+pub mod qualified_ident;
+pub mod statics;
+pub mod variable;

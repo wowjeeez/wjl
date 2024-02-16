@@ -7,7 +7,7 @@ pub struct WjlError {
     pub level: ErrorLevel,
     pub cause: Option<String>,
     pub location: (usize, usize, Option<(usize, usize)>),
-    pub is_from_lex: bool
+    pub is_from_lex: bool,
 }
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ErrorLevel {
@@ -25,7 +25,7 @@ impl WjlError {
             location: (0, 0, None),
             end_char: None,
             cause: None,
-            is_from_lex: true
+            is_from_lex: true,
         }
     }
 
@@ -38,10 +38,9 @@ impl WjlError {
             location: (0, 0, None),
             end_char: None,
             cause: None,
-            is_from_lex: false
+            is_from_lex: false,
         }
     }
-
 
     pub fn cause<T: Into<String>>(&mut self, msg: T) -> &mut Self {
         self.cause = Some(msg.into());

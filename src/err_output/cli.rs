@@ -1,7 +1,7 @@
-use colored::Colorize;
-use pad::{Alignment, PadStr};
 use crate::errors::{ErrorLevel, ErrorReporter, WjlError};
 use crate::helpers::lineify;
+use colored::Colorize;
+use pad::{Alignment, PadStr};
 
 pub fn output_errors_to_cli(reporter: ErrorReporter) {
     let lines = lineify(reporter.file);
@@ -34,8 +34,19 @@ impl WjlError {
         let end = if self.end_char.is_some() {
             let (end_line, encd_char) = self.location.2.unwrap();
             format!(" -> {}:{}", end_line, encd_char)
-        } else {"".to_string()};
-        println!("(wjl/{}) {} in {}:{}:{}{}\n {}", comp.italic(), level, file.blue(), line_start, char_start, end, self.message.bold());
+        } else {
+            "".to_string()
+        };
+        println!(
+            "(wjl/{}) {} in {}:{}:{}{}\n {}",
+            comp.italic(),
+            level,
+            file.blue(),
+            line_start,
+            char_start,
+            end,
+            self.message.bold()
+        );
         println!();
         let line = &lines.get(line_start - 1).unwrap();
         let line = fmt_line(&line, char_start);
@@ -49,12 +60,21 @@ impl WjlError {
         if self.end_char.is_some() {
             let (end_line, end_char) = self.location.2.unwrap();
             if end_line == line_start {
-                println!("{}", "^".repeat(end_char - char_start).pad_to_width_with_alignment(line.len() + line_data.len(), Alignment::Right).yellow())
+                println!(
+                    "{}",
+                    "^".repeat(end_char - char_start)
+                        .pad_to_width_with_alignment(line.len() + line_data.len(), Alignment::Right)
+                        .yellow()
+                )
             } else {
                 todo!()
             }
         } else {
-            println!("{}", "^ ".pad_to_width_with_alignment(line.len() + line_data.len(), Alignment::Right).yellow());
+            println!(
+                "{}",
+                "^ ".pad_to_width_with_alignment(line.len() + line_data.len(), Alignment::Right)
+                    .yellow()
+            );
         }
         if next_line.is_some() {
             println!("[{}]: {}", line_start + 1, next_line.unwrap());

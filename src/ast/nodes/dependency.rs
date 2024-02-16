@@ -6,5 +6,5 @@ use crate::tokens::span::Span as Tspan;
 pub struct DependencyImport {
     pub path: QualifiedIdent,
     pub is_js: bool,
-    pub receiver: Option<Tspan<NamedRef>>
+    pub receiver: Option<Tspan<NamedRef>>,
 }

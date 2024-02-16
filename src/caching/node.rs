@@ -1,3 +1,1 @@
-pub trait CacheRoot {
-
-}
+pub trait CacheRoot {}

@@ -35,7 +35,7 @@ pub fn lineify(file: &String) -> Vec<String> {
         if c as u8 == 0x0A {
             lines.push(line.clone());
             line.clear();
-            continue
+            continue;
         }
         line.write_char(c).unwrap()
     }

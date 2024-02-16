@@ -2,7 +2,7 @@ use crate::ast::ToAst;
 use crate::err_output::output_errors_to_cli;
 use crate::errors::ErrorReporter;
 use crate::helpers::Print;
-use crate::lexer::{lex_stream};
+use crate::lexer::lex_stream;
 
 mod errors;
 mod iter;
@@ -24,7 +24,7 @@ fn main() {
     if !reporter.errors.is_empty() {
         output_errors_to_cli(reporter)
     } else {
-      dbg!(ast);
+        dbg!(ast);
     }
 
     //dbg!(&stream);
