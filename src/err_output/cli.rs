@@ -31,7 +31,11 @@ impl WjlError {
             "ast" //TODO! more levels here as we proceed
         };
         let (line_start, char_start, end) = self.location;
-        println!("(wjl/{}) {} in {}:{}:{}\n {}", comp.italic(), level, file.blue(), line_start, char_start, self.message.bold());
+        let end = if self.end_char.is_some() {
+            let (end_line, encd_char) = self.location.2.unwrap();
+            format!(" -> {}:{}", end_line, encd_char)
+        } else {"".to_string()};
+        println!("(wjl/{}) {} in {}:{}:{}{}\n {}", comp.italic(), level, file.blue(), line_start, char_start, end, self.message.bold());
         println!();
         let line = &lines.get(line_start - 1).unwrap();
         let line = fmt_line(&line, char_start);
@@ -40,8 +44,9 @@ impl WjlError {
         if prev_line.is_some() {
             println!("[{}]: {}", line_start - 1, prev_line.unwrap());
         }
-        println!("[{}]: {}",line_start, line.bold());
-        println!("{}", "^ ".pad_to_width_with_alignment(line.len(), Alignment::Right).yellow());
+        let line_data = format!("[{}]: ", line_start);
+        println!("{}{}", line_data, line.bold());
+        println!("{}", "^ ".pad_to_width_with_alignment(line.len() + line_data.len(), Alignment::Right).yellow());
         if next_line.is_some() {
             println!("[{}]: {}", line_start + 1, next_line.unwrap());
         }

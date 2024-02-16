@@ -223,7 +223,12 @@ impl PeekableIterator<char> {
                 }
             };
         }
-        while let Some(mut char) = self.next() {
+        while let mut char = self.next() {
+            if char.is_none() {
+                finalize!();
+                break
+            }
+            let char = char.unwrap();
             if char.is_digit(10) {
                 buf.write_char(char).expect("Failed to write char to buf");
                 continue;
@@ -454,6 +459,7 @@ pub fn lex_stream(input: &String, reporter: &mut ErrorReporter) -> Vec<Span> {
                 }
             }
         }
+
         if char == '/' {
             let next = iter.peek_next();
             if next.map_or(false, |x| x == '/').eq(&true) {
@@ -507,7 +513,6 @@ pub fn lex_stream(input: &String, reporter: &mut ErrorReporter) -> Vec<Span> {
             stream.push(LITERAL_SINGLE(vec![Either::Left(lit)]).span(curr, lit_end));
             continue;
         }
-
         if char.is_digit(10) {
             iter.parse_decimal_number(&mut stream, reporter);
             continue;

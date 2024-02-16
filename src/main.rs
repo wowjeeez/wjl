@@ -24,7 +24,7 @@ fn main() {
     if !reporter.errors.is_empty() {
         output_errors_to_cli(reporter)
     } else {
-        dbg!(ast);
+      dbg!(ast);
     }
 
     //dbg!(&stream);

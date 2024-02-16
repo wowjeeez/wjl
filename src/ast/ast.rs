@@ -936,7 +936,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
         } else if next.get_inner_ref() == &Token::BRACKET_LEFT {
             self.parse_arr_expr(reporter)?.map(Expression::STATIC)
         } else { //TODO! bool invert expr somehow, make it fast
-            reporter.add(WjlError::ast(next.start).set_end_char(next.end).message("Expected expression.").ok());
+            reporter.add(WjlError::ast(start.start).set_end_char(start.end).message("Expected expression.").ok());
             return None
         };
         return Some(first_part);
