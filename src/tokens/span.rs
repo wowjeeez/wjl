@@ -2,7 +2,7 @@ use std::fmt::Debug;
 use crate::tokens::IdentKind;
 use crate::tokens::tokens::Token;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub struct Span<T: Clone + Debug> {
     inner: T,
     pub(crate) start: usize,

@@ -1,0 +1,2 @@
+val x = "yo yo $abc"
+val y = "yo yo yo ${1 + 1}"

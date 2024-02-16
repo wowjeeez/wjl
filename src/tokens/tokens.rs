@@ -23,7 +23,7 @@ impl IdentKind {
     }
 }
 
-pub type Literal = Vec<Either<String, Vec<Token>>>;
+pub type Literal = Vec<Either<String, Vec<Span<Token>>>>;
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
 #[allow(non_camel_case_types, unused)]
 pub enum Token {

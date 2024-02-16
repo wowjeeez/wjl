@@ -910,7 +910,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
             let expr = self.ecx_parse_w_preceeding_expr(reporter, Expression::IDENT(ident).into_span(start, end))?;
             expr
         } else if next.get_inner_ref().is_static() {
-            Expression::STATIC(next.get_inner().as_static_unchecked()).into_span(next.start, next.end)
+            Expression::STATIC(next.get_inner().as_static_unchecked(reporter)?).into_span(next.start, next.end)
         }
         else if next.get_inner_ref() == &Token::KEYWORD_AWAIT {
             let wrapped = self.parse_expr(reporter)?;
@@ -961,7 +961,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
         let next = next.unwrap();
         let start_ix = next.start;
         let start = if next.get_inner_ref().is_static() {
-            Expression::STATIC(next.get_inner().as_static_unchecked()).into_span(start_ix, next.end)
+            Expression::STATIC(next.get_inner().as_static_unchecked(reporter)?).into_span(start_ix, next.end)
         } else if next.get_inner_ref().is_ident() {
             let ident = self.parse_qualified_ident(reporter, false)?;
             let end = ident.end;

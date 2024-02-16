@@ -1,7 +1,7 @@
 use crate::errors::{ErrorReporter, WjlError};
 use crate::helpers::{Print, treat_as_bigint};
 use crate::iter::{wrap_iter, GenericIterator, PeekableIterator};
-use crate::tokens::span::Span as GenericSpan;
+use crate::tokens::span::{IntoSpan, Span as GenericSpan};
 use crate::tokens::Token::{LITERAL_DOUBLE, LITERAL_SINGLE};
 use crate::tokens::{IdentKind, Token};
 use either::Either;
@@ -12,8 +12,9 @@ use tracing::instrument;
 type Span = GenericSpan<Token>;
 
 impl PeekableIterator<char> {
-    pub fn pull_literal(&mut self, matcher: char, reporter: &mut ErrorReporter) -> String {
+    pub fn pull_literal(&mut self, matcher: char, reporter: &mut ErrorReporter, disallow_template: bool) -> Vec<Either<String, Vec<Span>>> {
         let mut content: String = String::new();
+        let mut segments = vec![];
         let mut delim_found = false;
         let start_index = self.get_index().unwrap();
         while let Some(char) = self.next() {
@@ -22,9 +23,67 @@ impl PeekableIterator<char> {
                 delim_found = true;
                 break;
             }
+            if char == '$' &&!is_prev_esc {
+                if disallow_template {
+                    reporter.add(WjlError::lex(self.get_index().unwrap()).message("Template literals are not allowed here.").ok());
+                    break
+                }
+                let next = self.next();
+                if !next.is_none() {
+                    let next = next.unwrap();
+                    if next.is_alphabetic() {
+                        segments.push(Either::Left(content.clone()));
+                        content.clear();
+                        let ident_start = self.get_index().unwrap();
+                        let ident = self.pull_ident();
+                        let end = self.get_index().unwrap();
+                        segments.push(Either::Right(vec![Token::IDENT(IdentKind::DEFAULT(ident)).into_span(ident_start, end)]));
+                        continue
+                    }
+                    if next == '{' {
+                        let mut inner_tok_stream = vec![];
+                        let mut um_depth = 0;
+                        let ident_base = self.get_index().unwrap() + 1;
+                        'inner: while let next = self.next() {
+                            if next.is_none() {
+                                reporter.add(WjlError::lex(self.get_index().unwrap() - 1).message("Unclosed template literal delimiter").ok());
+                                break
+                            }
+                            let next = next.unwrap();
+                            if next == '{' {
+                                um_depth += 1;
+                            }
+                            if next == '}' && um_depth == 0 {
+                                break 'inner
+                            }
+                            if next == '}' {
+                                um_depth -= 1;
+                            }
+                            inner_tok_stream.push(next);
+                        }
+                        let orig_rep = reporter.errors.len();
+
+                        let token_stream = lex_stream(&inner_tok_stream.into_iter().collect::<String>(), reporter).into_iter()
+                            .map(|x| x.get_inner().into_span(x.start + ident_base, x.end + 1 + ident_base)).collect::<Vec<Span>>();
+                        if reporter.errors.len() != orig_rep {
+                            break
+                        }
+                        segments.push(Either::Left(content.clone()));
+                        content.clear();
+                        segments.push(Either::Right(token_stream));
+                        continue
+                    }
+                    reporter.add(WjlError::lex(self.get_index().unwrap()).message("Invalid character after literal").pot_fix("Escape the $.").ok());
+                    break
+                }
+            }
             content
                 .write_char(char)
                 .expect("Failed to write char into buf");
+        }
+        if content.len() != 0 {
+            segments.push(Either::Left(content.clone()));
+            content.clear();
         }
         if !delim_found {
             reporter.add(
@@ -33,9 +92,9 @@ impl PeekableIterator<char> {
                     .set_end_char(self.get_content().len() - 1)
                     .ok(),
             );
-            return content;
+            return segments;
         }
-        return content;
+        return segments;
     }
 
     pub fn pull_ident(&mut self) -> String {
@@ -70,7 +129,7 @@ impl PeekableIterator<char> {
         }
         let curr = curr.unwrap();
         let ident_content = if curr == '`' {
-            self.pull_literal('`', reporter)
+            self.pull_literal('`', reporter, true).pull_raw_string()
         } else {
             self.pull_ident()
         };
@@ -501,16 +560,16 @@ pub fn lex_stream(input: &String, reporter: &mut ErrorReporter) -> Vec<Span> {
         }
         if char == '"' {
             let curr = iter.get_index().unwrap();
-            let lit = iter.pull_literal('"', reporter);
+            let lit = iter.pull_literal('"', reporter, false);
             let lit_end = iter.get_index().unwrap();
-            stream.push(LITERAL_DOUBLE(vec![Either::Left(lit)]).span(curr, lit_end)); //TODO! parse literals
+            stream.push(LITERAL_DOUBLE(lit).span(curr, lit_end)); //TODO! parse literals
             continue;
         }
         if char == '\'' {
             let curr = iter.get_index().unwrap();
-            let lit = iter.pull_literal('"', reporter);
+            let lit = iter.pull_literal('"', reporter, false);
             let lit_end = iter.get_index().unwrap();
-            stream.push(LITERAL_SINGLE(vec![Either::Left(lit)]).span(curr, lit_end));
+            stream.push(LITERAL_SINGLE(lit).span(curr, lit_end));
             continue;
         }
         if char.is_digit(10) {
@@ -815,5 +874,14 @@ impl Print for Vec<Span> {
             let str = tok.to_colored_str();
             print!(" {} ", str);
         }
+    }
+}
+
+pub trait PullRawString {
+    fn pull_raw_string(self) -> String;
+}
+impl PullRawString for Vec<Either<String, Vec<Span>>> {
+    fn pull_raw_string(self) -> String {
+        self.into_iter().map(|x| x.left().unwrap()).collect::<String>()
     }
 }

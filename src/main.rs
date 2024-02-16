@@ -16,7 +16,7 @@ mod err_output;
 
 fn main() {
     tracing_subscriber::fmt::init();
-    let baseline_dep = include_str!("../baselines/isolated/variables.wjl").to_string();
+    let baseline_dep = include_str!("../baselines/isolated/template_str.wjl").to_string();
     let mut reporter = ErrorReporter::for_file("str_val.wjl".to_string(), &baseline_dep);
     let stream = lex_stream(&baseline_dep, &mut reporter);
     //stream.print();
