@@ -825,6 +825,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
     }
     // expecting that we are on the paren
     pub fn parse_paren_func_call(&mut self, reporter: &mut ErrorReporter, reference: TSpan<Expression>) -> Option<TSpan<FunctionCallExpr>> {
+        todo!("Non positional argument parsing");
         debug!("Parsing paren func call");
         let start = reference.start;
         let paren = self.peek_next_skip_ml_comment().0;
