@@ -587,14 +587,29 @@ pub fn lex_stream(input: &String, reporter: &mut ErrorReporter) -> Vec<Span> {
         let next_tok = iter.peek_next();
         let start = iter.get_index().unwrap();
         if next_tok.is_none() {
-            stream.push(tok.span(start, start));
-            continue
+             continue
         }
         let next_tok = next_tok.unwrap();
         if tok == Token::COLON && next_tok == '3' {
             println!("yorick my beloved (https://discord.com/channels/577993482761928734/1193960831424151552/1204858917956493364)");
         }
         let next_tok = match_char(next_tok);
+        if tok == Token::DOLLAR {
+            let next = iter.peek_next();
+            if next.is_none() {
+                stream.push(Token::IDENT(IdentKind::DEFAULT("$".to_string())).into_span(start, start));
+                continue
+            }
+            let next = next.unwrap();
+            if next.is_alphabetic() {
+                let ident = iter.pull_ident();
+                stream.push(Token::LABEL(ident).into_span(start, iter.get_index().unwrap()));
+                continue
+            } else {
+                stream.push(Token::IDENT(IdentKind::DEFAULT("$".to_string())).into_span(start, start));
+                continue
+            }
+        }
 
         let mut push_t = |tok: Token| {
             iter.next();
@@ -865,7 +880,8 @@ impl Span {
             Token::KEYWORD_PURE => "pure".blue(),
             Token::RANGE_OP => "..".green(),
             Token::DOLLAR => "$".green(),
-            Token::INCL_RANGE_OP => "..=".green()
+            Token::INCL_RANGE_OP => "..=".green(),
+            Token::LABEL(lb) => format!("[label: {}]", lb).red()
         }
     }
 }

@@ -123,6 +123,7 @@ pub enum Token {
     LITERAL_DOUBLE(Literal),
     LITERAL_SINGLE(Literal),
     WJL_COMPILER_PLACEHOLDER,
+    LABEL(String),
     DELIMITER,
     WHITESPACE,
     PIPE_OP,
