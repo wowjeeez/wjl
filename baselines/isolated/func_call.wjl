@@ -1,0 +1,13 @@
+val result = myFunc(1, 2)
+val result2 = myFunc(firstParam = 1, 2)
+val result3 = myFunc(firstParam = 1, secondParam = 2)
+val result4 = myFunc(1, secondParam = 2)
+
+val result5 = myFunc(1) it * 2
+val result6 = myFunc(2) {
+    it * 2
+}
+
+val result7 = myFunc(2) $top {
+    it@top * 2
+}

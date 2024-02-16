@@ -494,6 +494,7 @@ fn match_char(char: char) -> Token {
         '~' => Token::BIT_NOT,
         '^' => Token::BIT_XOR,
         ',' => Token::COMMA,
+        '$' => Token::DOLLAR,
         _ => Token::NONCE,
     }
 }
@@ -863,6 +864,7 @@ impl Span {
             Token::OP_ELVIS => ":?".green(),
             Token::KEYWORD_PURE => "pure".blue(),
             Token::RANGE_OP => "..".green(),
+            Token::DOLLAR => "$".green(),
             Token::INCL_RANGE_OP => "..=".green()
         }
     }

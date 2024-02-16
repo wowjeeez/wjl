@@ -59,6 +59,7 @@ pub enum Token {
     EXCL_MARK,
     BACKSLASH,
     COMMA,
+    DOLLAR,
     SEMI_COLON,
     LINE_BREAK,
     PIPE,
