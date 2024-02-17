@@ -161,5 +161,5 @@ pub struct TypeConstraintExprPart {
 #[derive(Clone, Debug)]
 pub struct AppliedDecoratorExpr {
     pub decorator: QualifiedIdent,
-    pub args: Option<Vec<Expression>>, //None if the decorator is called like @Decorator
+    pub args: Option<Vec<TSpan<Expression>>>, //None if the decorator is called like @Decorator
 }

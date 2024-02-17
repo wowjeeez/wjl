@@ -1,5 +1,2 @@
-val test = 10 // works
-once val test2 // works
-const test: 10 = ident // works
-const fails: 10 = 10 // works
-const fails2 = 1f //works
+@wjl.testStub(15)
+val a = 10

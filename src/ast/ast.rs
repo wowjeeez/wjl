@@ -1853,11 +1853,41 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
     ) -> Option<TSpan<Expression>> {
         todo!()
     }
+
+    // expecting that we are on the @
     pub fn parse_decorator(
         &mut self,
         reporter: &mut ErrorReporter,
     ) -> Option<TSpan<AppliedDecoratorExpr>> {
-        todo!()
+        let ident = self.next_skip_ml_comment();
+        if ident.is_none() {
+            reporter.add(WjlError::ast(self.curr().unwrap().end).message("Expected identifier for decorator, got nothing.").ok());
+            return None
+        }
+        let ident = ident.unwrap();
+        if !ident.get_inner_ref().is_ident() {
+            reporter.add(WjlError::ast(self.curr().unwrap().end).message("Expected identifier for decorator.").ok());
+            return None
+        }
+        let ident = self.parse_qualified_ident(reporter, false)?;
+        let next = self.peek_next_skip_ml_comment().0;
+        if next.map_or(false, |x| x.get_inner_ref() == &Token::PAREN_LEFT).eq(&true) {
+            self.next_skip_ml_comment();
+            let ident_c = ident.clone();
+            let start = ident_c.start;
+            let dec = self.parse_paren_func_call(reporter, Expression::IDENT(ident).into_span(ident_c.start, ident_c.end))?;
+            let end = dec.end;
+            return Some(AppliedDecoratorExpr {
+                decorator: ident_c,
+                args: Some(dec.get_inner().arguments)
+            }.into_span(start, end))
+        }
+
+        let (s, e) = (ident.start, ident.end);
+        return Some(AppliedDecoratorExpr {
+            decorator: ident,
+            args: None
+        }.into_span(s, e));
     }
 }
 
