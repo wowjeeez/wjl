@@ -21,6 +21,7 @@ use crate::tokens::Token;
 use crate::tokens::Token::{KEYWORD_CONST, KEYWORD_VAL, KEYWORD_VAR};
 use either::Either;
 use std::ops::Bound::Unbounded;
+use std::process::id;
 use tracing::{debug, error, info};
 
 pub type TokenSpan = TSpan<Token>;
@@ -1120,6 +1121,41 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
         return Some(expr);
     }
 
+    // expecting that we are on the comma/paren
+    pub fn parse_func_arg(&mut self, reporter: &mut ErrorReporter) -> Option<TSpan<Expression>> {
+        let next = self.peek_next_skip_ml_comment().0;
+        if next.is_none() {
+            reporter.add(WjlError::ast(self.curr().unwrap().end).message("Expected expression or non positional argument, got nothing.").ok());
+            return None
+        }
+        let next = next.unwrap();
+        if next.get_inner_ref().is_ident() {
+            self.next_skip_ml_comment();
+            let ident = self.parse_qualified_ident(reporter, false)?;
+            let next = self.peek_next_skip_ml_comment().0;
+            if next.is_none() {
+                reporter.add(WjlError::ast(ident.end).message("Expected comma, assignment or closing parenthesis, got nothing.").ok());
+                return None
+            }
+            let next = next.unwrap();
+            if [Token::COMMA, Token::PAREN_RIGHT].contains(&next.get_inner_ref()) {
+                let (s, e) = (ident.start, ident.end);
+                return Some(Expression::IDENT(ident).into_span(s, e))
+            }
+            if next.get_inner_ref() == &Token::ASSIGN {
+                self.next_skip_ml_comment();
+                let assigned_val = self.parse_expr(reporter)?;
+                let start = ident.start;
+                let expr = Expression::NONPOS_ARG(ident, Box::new(assigned_val.get_inner())).into_span(start, assigned_val.end);
+                return Some(expr)
+            }
+            reporter.add(WjlError::ast(next.start).set_end_char(next.end).message("Expected comma, assignment or closing parenthesis.").ok());
+            return None
+        }
+        self.parse_expr(reporter)
+
+    }
+
     pub fn parse_expr_func_call(
         &mut self,
         reporter: &mut ErrorReporter,
@@ -1133,7 +1169,6 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
         reporter: &mut ErrorReporter,
         reference: TSpan<Expression>,
     ) -> Option<TSpan<FunctionCallExpr>> {
-        todo!("Non positional argument parsing");
         debug!("Parsing paren func call");
         let start = reference.start;
         let paren = self.peek_next_skip_ml_comment().0;
@@ -1156,7 +1191,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
             );
         }
 
-        let argument1 = self.parse_expr(reporter)?;
+        let argument1 = self.parse_func_arg(reporter)?;
         let ix = self.get_index().unwrap();
         let next = self.next_skip_ml_comment();
         if next.is_none() {
@@ -1200,7 +1235,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
             }
             let next = next.unwrap();
             if next.get_inner_ref() == &Token::COMMA {
-                let arg = self.parse_expr(reporter)?;
+                let arg = self.parse_func_arg(reporter)?;
                 args.push(arg);
                 continue;
             }

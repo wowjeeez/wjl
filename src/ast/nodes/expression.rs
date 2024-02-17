@@ -13,7 +13,6 @@ pub enum Expression {
     STATIC(StaticExpr),
     PIPE(Vec<TSpan<Expression>>),
     FUNC_CALL(FunctionCallExpr),
-    TRANSIENT_FUNC_ARGS(Vec<TSpan<Expression>>),
     IF(IfExpr),
     MATCH(MatchExpr),
     ARRAY(ArrayExpr),
@@ -36,6 +35,7 @@ pub enum Expression {
     BOOLEAN(BooleanExpression),
     TYPE_CONSTRAINT(Box<TypeConstraintExpr>),
     WJL_PLACEHOLDER,
+    NONPOS_ARG(QualifiedIdent, Box<Expression>)
 }
 
 #[derive(Clone, Debug)]
