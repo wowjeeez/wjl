@@ -1,2 +1,2 @@
-@wjl.testStub(15)
-val a = 10
+//@wjl.testStub(15)
+val a: T : ToString + C ? a : b = 10

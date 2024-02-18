@@ -471,6 +471,70 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
         reporter.add(WjlError::lex(next.start).message("Unexpected token").ok());
         return None;
     }
+
+    pub fn parse_qualified_ident_2(
+        &mut self,
+        reporter: &mut ErrorReporter,
+        treat_generics_as_decl: bool
+    ) -> Option<QualifiedIdent> {
+        let start = self.curr().unwrap().start;
+        self.seek(-1);
+        let mut elements: Vec<TSpan<QualifiedIdentPart>> = vec![];
+        //ident1<A, B>?.ident2!::test<C>
+        let mut global_end = 0;
+        while let Some(ident) = self.next_skip_ml_comment() {
+            if !ident.get_inner_ref().is_ident() {
+                break
+            }
+            let prev = self.peek_prev_skip_ml_comment().0;
+            let (prev_link, start) = if prev.map_or(false, |x| [Token::PERIOD, Token::DOUBLE_COLON].contains(x.get_inner_ref())).eq(&true) {
+                let prev = prev.unwrap();
+                (Some(match prev.get_inner_ref() {
+                    Token::DOUBLE_COLON => Connector::D_COL,
+                    Token::PERIOD => Connector::PERIOD,
+                    _ => unreachable!(),
+                }), prev.start)
+            } else {(None, ident.start)};
+
+            let next = self.peek_next_skip_ml_comment().0;
+            if next.is_none() {
+                let ident_end = ident.end;
+                global_end = ident_end;
+                let (ident, is_bt) = ident.get_inner_ref().get_ident_inner();
+                elements.push(QualifiedIdentPart {
+                    generic_args: None,
+                    is_asserted_as_non_null: false,
+                    is_btick: is_bt,
+                    is_opt_chained_to_next: false,
+                    segment: ident,
+                    previous_link: prev_link
+                }.into_span(start, ident_end));
+                break
+            }
+            let next = next.unwrap();
+            let next = if next.get_inner_ref() == Token::ANGLE_LEFT {
+
+            } else {next};
+            if next.get_inner_ref() == Token::QMARK || next.get_inner_ref() == Token::EXCL_MARK {
+
+            }
+        }
+        return None
+    }
+
+    // expecting that we are on the opening <
+    // ident<A> > 10
+    // ident < A
+    // ident<A, 10>
+    // ident<A : B ? 1 : 2>
+    // ident<[A, B]>
+    // ident<class A {}>
+    // broader cx: myFunction(someOtherFunction<C>(a) < 10, b > 10)
+    pub fn maybe_parse_generic_arguments(&mut self, reporter: &mut ErrorReporter, force: bool) {
+
+    }
+
+
     // expecting that we are on the first ident
     pub fn parse_qualified_ident(
         &mut self,
@@ -499,6 +563,13 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
         }
         let mut contents = vec![ident];
         let mut next = next.unwrap();
+        let (next_after_op, seek) = self.peek_n_skip_ml_comment(2);
+        if next_after_op.map_or(false, |x| ![Token::PERIOD, Token::DOUBLE_COLON].contains(x.get_inner_ref())).eq(&true) {
+            self.seek(seek);
+            return Some(contents.to_span(first_ident.start, first_ident.end));
+        }
+        self.seek(seek);
+
         if next.get_inner_ref() == &Token::QMARK || next.get_inner_ref() == &Token::EXCL_MARK {
             let new = contents.pop().unwrap();
             let inner = new.get_inner();
@@ -879,7 +950,6 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
                 let (decorators, access_mod, mods, mod_start) = self
                     .get_and_clear_cache()
                     .into_decorators_and_modifiers(reporter, span.start)?;
-                let decl_keyword_idx = self.get_index().unwrap();
                 let next = self.next_skip_ml_comment();
                 if next.is_none() {
                     reporter.add(
@@ -943,7 +1013,6 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
                     break;
                 }
                 let next = next_2.unwrap();
-
                 if next.get_inner_ref() == &Token::ASSIGN {
                     initializer = Some(self.parse_expr(reporter)?);
                 } else if needs_init {
@@ -1336,6 +1405,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
     // : "wstri"
     // : IntRange<a, b>
     // : T : ToString ? 10 : 20
+    // : T : ToString + A ? 10 : 20
     // : <Ident>
     // : <Static>
     pub fn parse_type_annotation(
@@ -1386,6 +1456,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
         let (start, end) = (constraint.start, constraint.end);
         let constraint =
             Expression::TYPE_CONSTRAINT(Box::new(constraint.get_inner())).into_span(start, end);
+       // dbg!(&next);
         if next
             .map_or(true, |x| x.get_inner_ref() != &Token::QMARK)
             .eq(&true)
@@ -1427,7 +1498,7 @@ impl PeekableIterator<TokenSpan, Either<TSpan<AppliedDecoratorExpr>, TokenSpan>>
         }
         let first = self.parse_qualified_ident(reporter, false)?;
         let (start, end) = (first.start, first.end);
-        let next = self.peek_next_skip_ml_comment().0;
+        let next = self.curr();
         if next.is_none() {
             return Some(
                 TypeConstraintExpr {
