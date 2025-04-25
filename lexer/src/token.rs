@@ -18,7 +18,6 @@ pub enum Token {
     DIV,
     MUL,
     MOD,
-    EXP,
     COLON,
     PIPE,
     AMP,
