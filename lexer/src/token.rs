@@ -1,4 +1,4 @@
-use crate::span::Span;
+use common::span::Span;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Token {

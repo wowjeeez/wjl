@@ -38,3 +38,13 @@ impl <T: Clone> Span<T> {
         self.content.clone()
     }
 }
+
+impl <T: Clone>Clone for Span<T> {
+    fn clone(&self) -> Self {
+        Span {
+            start_index: self.start_index,
+            end_index: self.end_index,
+            content: self.content.clone(),
+        }
+    }
+}

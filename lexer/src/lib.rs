@@ -1,15 +1,25 @@
+mod ir;
+pub mod token;
+mod literal;
+
 use std::fmt::Write;
 use common::iter::SmartIterator;
 use common::span::Span;
-use common::token::Token;
+use common::tokio;
+use token::Token;
+use crate::token::TokenSpan;
 
-pub fn lex_string(input: String) -> Vec<Span<Token>> {
+pub async fn lex_string(input: String) -> Vec<Span<Token>> {
     let chars =  input.chars().collect::<Vec<char>>();
     let mut token_stream = vec![];
     let mut stream = SmartIterator::new(chars);
     let mut current_lit_proto:  Option<fn(String) -> Token> = None;
     let mut current_lit_start: Option<usize> = None;
     let mut current_lit_content: String = String::new();
+    
+    let mut push_t = |token: TokenSpan| {
+        token_stream.push(token)
+    };
 
     while let Some((current, current_index)) = stream.next() {
         let current = current.clone();
@@ -61,7 +71,8 @@ pub fn lex_string(input: String) -> Vec<Span<Token>> {
                         _ => token
                     }
                 }
-                token_stream.push(token.spanned(start, end));
+                let token = token.spanned(start, end);
+                push_t(token.clone());
                 lit_content.clear();
             }
         };
@@ -74,11 +85,14 @@ pub fn lex_string(input: String) -> Vec<Span<Token>> {
                 if (character == '"' && is_double) || character == '\'' {
                     break 'lit
                 }
+                if character == '$' && !stream.lookbehind_is(&'\\') && stream.peek_is(&'{') {
+                    //TODO! send the entire current + 1 into a new compilation subflow so we can calculate the matched delimiter
+                }
                 needs_parsing = needs_parsing || character == '$' && !stream.lookbehind_is(&'\\');
                 literal_content.write_char(character).unwrap();
             }
             let token = if is_double { Token::D_LITERAL(literal_content, needs_parsing) } else {Token::S_LITERAL(literal_content, needs_parsing)};
-            token_stream.push(token.spanned(current_index, stream.get_current_index()));
+            push_t(token.spanned(current_index, stream.get_current_index()));
             continue
         }
 
@@ -102,14 +116,14 @@ pub fn lex_string(input: String) -> Vec<Span<Token>> {
             current_lit_content.write_char(current).unwrap();
             continue
         }
-        
+
         if current == '.' && !is_in_literal && stream.peek_is_fn(|x| x.is_digit(10)) {
             current_lit_proto = Some(Token::FD_NUMBER);
             current_lit_start = Some(current_index);
             current_lit_content.write_char(current).unwrap();
             continue
         }
-        
+
        if current == '.' && is_in_literal && stream.lookbehind_is_fn(|x| x.is_digit(10)) {
            current_lit_proto = Some(Token::FD_NUMBER);
            current_lit_content.write_char(current).unwrap();
@@ -128,7 +142,7 @@ pub fn lex_string(input: String) -> Vec<Span<Token>> {
                     break 'whitespace
                 }
             }
-            token_stream.push(Token::WHITESPACE_MERGED.spanned(current_index, stream.get_current_index()));
+            push_t(Token::WHITESPACE_MERGED.spanned(current_index, stream.get_current_index()));
             continue
         }
 
@@ -159,7 +173,7 @@ pub fn lex_string(input: String) -> Vec<Span<Token>> {
         };
         if op != Token::WHITESPACE_MERGED {
             save_ident(&mut current_lit_content);
-            token_stream.push(op.spanned_one(stream.get_current_index()));
+            push_t(op.spanned_one(stream.get_current_index()));
             continue
         }
 
