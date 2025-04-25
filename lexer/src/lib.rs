@@ -1,11 +1,9 @@
-mod ir;
 pub mod token;
 mod literal;
 
 use std::fmt::Write;
 use common::iter::SmartIterator;
 use common::span::Span;
-use common::tokio;
 use token::Token;
 use crate::token::TokenSpan;
 
@@ -169,6 +167,7 @@ pub async fn lex_string(input: String) -> Vec<Span<Token>> {
             ';' => Token::SEMICOLON,
             '.' => Token::PERIOD,
             '#' => Token::HASH,
+            '@' => Token::AT,
             _ => Token::WHITESPACE_MERGED,
         };
         if op != Token::WHITESPACE_MERGED {

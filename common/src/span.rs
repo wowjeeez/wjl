@@ -48,3 +48,11 @@ impl <T: Clone>Clone for Span<T> {
         }
     }
 }
+
+impl <T: PartialEq> PartialEq for Span<T> {
+    fn eq(&self, other: &Self) -> bool {
+        other.content.eq(&self.content) && other.end_index == self.end_index &&  other.start_index == self.start_index
+    }
+}
+
+impl <T: Eq> Eq for Span<T> {}
