@@ -82,6 +82,55 @@ pub fn lex_string(input: String) -> Vec<Span<Token>> {
             continue
         }
 
+        if current == '0' && ['b', 'o', 'x'].contains(stream.peek().unwrap_or(&'_')) {
+            save_ident(&mut current_lit_content);
+            let (num_type, _) = stream.next().unwrap();
+            if num_type == &'b' {
+                current_lit_proto = Some(Token::B_NUMBER);
+            } else if num_type == &'o' {
+                current_lit_proto = Some(Token::O_NUMBER);
+            }  else if num_type == &'x' {
+                current_lit_proto = Some(Token::H_NUMBER);
+            }
+            current_lit_start = Some(current_index);
+            continue
+        }
+
+        if current.is_digit(10) && !is_in_literal {
+            current_lit_proto = Some(Token::D_NUMBER);
+            current_lit_start = Some(current_index);
+            current_lit_content.write_char(current).unwrap();
+            continue
+        }
+        
+        if current == '.' && !is_in_literal && stream.peek_is_fn(|x| x.is_digit(10)) {
+            current_lit_proto = Some(Token::FD_NUMBER);
+            current_lit_start = Some(current_index);
+            current_lit_content.write_char(current).unwrap();
+            continue
+        }
+        
+       if current == '.' && is_in_literal && stream.lookbehind_is_fn(|x| x.is_digit(10)) {
+           current_lit_proto = Some(Token::FD_NUMBER);
+           current_lit_content.write_char(current).unwrap();
+           continue
+       }
+
+        if stream.lookbehind_is_fn(|t| t.is_digit(10)) && current == '_' {
+            continue
+        }
+        if current.is_whitespace() {
+            save_ident(&mut current_lit_content);
+            'whitespace: loop {
+                if stream.peek_is_fn(|t| t.is_whitespace()) {
+                    stream.next();
+                } else {
+                    break 'whitespace
+                }
+            }
+            token_stream.push(Token::WHITESPACE_MERGED.spanned(current_index, stream.get_current_index()));
+            continue
+        }
 
         let op = match current {
             '(' => Token::L_PAREN,
@@ -111,43 +160,6 @@ pub fn lex_string(input: String) -> Vec<Span<Token>> {
         if op != Token::WHITESPACE_MERGED {
             save_ident(&mut current_lit_content);
             token_stream.push(op.spanned_one(stream.get_current_index()));
-            continue
-        }
-
-        if current == '0' && ['b', 'o', 'x'].contains(stream.peek().unwrap_or(&'_')) {
-            save_ident(&mut current_lit_content);
-            let (num_type, _) = stream.next().unwrap();
-            if num_type == &'b' {
-                current_lit_proto = Some(Token::B_NUMBER);
-            } else if num_type == &'o' {
-                current_lit_proto = Some(Token::O_NUMBER);
-            }  else if num_type == &'x' {
-                current_lit_proto = Some(Token::H_NUMBER);
-            }
-            current_lit_start = Some(current_index);
-            continue
-        }
-
-        if current.is_digit(10) && !is_in_literal {
-            current_lit_proto = Some(Token::D_NUMBER);
-            current_lit_start = Some(current_index);
-            current_lit_content.write_char(current).unwrap();
-            continue
-        }
-
-        if stream.lookbehind_is_fn(|t| t.is_digit(10)) && current == '_' {
-            continue
-        }
-        if current.is_whitespace() {
-            save_ident(&mut current_lit_content);
-            'whitespace: loop {
-                if stream.peek_is_fn(|t| t.is_whitespace()) {
-                    stream.next();
-                } else {
-                    break 'whitespace
-                }
-            }
-            token_stream.push(Token::WHITESPACE_MERGED.spanned(current_index, stream.get_current_index()));
             continue
         }
 

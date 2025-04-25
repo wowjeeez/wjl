@@ -31,7 +31,7 @@ pub enum Token {
     B_NUMBER(String),
     H_NUMBER(String),
     O_NUMBER(String),
-    F_LITERAL(String),
+    FD_NUMBER(String),
     KEYWORD_TRUE,
     KEYWORD_FALSE,
     KEYWORD_FUNCTION,
