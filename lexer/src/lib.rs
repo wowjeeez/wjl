@@ -39,7 +39,7 @@ pub fn lex_string(input: String) -> Vec<Span<Token>> {
                 if (character == '"' && is_double) || character == '\'' {
                     break 'lit
                 }
-                needs_parsing = character == '$' && !stream.lookbehind_is(&'\\');
+                needs_parsing = needs_parsing || character == '$' && !stream.lookbehind_is(&'\\');
                 literal_content.write_char(character).unwrap();
             }
             let token = if is_double { Token::D_LITERAL(literal_content, needs_parsing) } else {Token::S_LITERAL(literal_content, needs_parsing)};
@@ -115,7 +115,7 @@ pub fn lex_string(input: String) -> Vec<Span<Token>> {
             token_stream.push(Token::WHITESPACE_MERGED.spanned(current_index, stream.get_current_index()));
             continue
         }
-        
+
         if current.is_alphabetic() && !is_in_literal {
             current_lit_proto = Some(Token::IDENT);
             current_lit_start = Some(current_index);
@@ -128,6 +128,6 @@ pub fn lex_string(input: String) -> Vec<Span<Token>> {
             save_ident(&mut current_lit_content);
         }
     }
-    
+
     token_stream
 }
