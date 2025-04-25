@@ -8,6 +8,7 @@ mod function_decl;
 mod decorator;
 mod generic_args;
 mod class_decl;
+mod statements;
 
 use common::iter::SmartIterator;
 use lexer::token::TokenSpan;
