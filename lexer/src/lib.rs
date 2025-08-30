@@ -191,3 +191,10 @@ pub async fn lex_string(input: String) -> Vec<Span<Token>> {
 
     token_stream
 }
+
+
+#[cfg(test)]
+mod tests {
+    #[test]
+
+}
