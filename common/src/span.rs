@@ -1,9 +1,20 @@
 use std::fmt::Debug;
+
 #[derive(Debug)]
 pub struct Span<T> {
     start_index: usize,
     end_index: usize,
     content: T,
+}
+
+impl<T: Default> Span<T> {
+    pub fn zeroed() -> Span<T> {
+        Span {
+            start_index: 0,
+            end_index: 0,
+            content: T::default(),
+        }
+    }
 }
 
 impl <T> Span<T> {
@@ -14,6 +25,16 @@ impl <T> Span<T> {
             end_index,
         }
     }
+
+    pub fn boxed(self) -> Span<Box<T>> {
+        Span {
+            start_index: self.start_index,
+            end_index: self.end_index,
+            content: Box::new(self.content),
+        }
+    }
+
+
 
     pub fn get(&self) -> &T {
         &self.content
@@ -56,3 +77,4 @@ impl <T: PartialEq> PartialEq for Span<T> {
 }
 
 impl <T: Eq> Eq for Span<T> {}
+

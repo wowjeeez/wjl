@@ -127,6 +127,14 @@ pub async fn lex_string(input: String) -> Vec<Span<Token>> {
            current_lit_content.write_char(current).unwrap();
            continue
        }
+        if current == ':' && stream.peek_is(&':') {
+            if is_in_literal {
+                save_ident(&mut current_lit_content);
+            }
+            push_t(Token::D_COLON.spanned(current_index, current_index + 1));
+            stream.next();
+            continue
+        }
 
         if stream.lookbehind_is_fn(|t| t.is_digit(10)) && current == '_' {
             continue
@@ -190,11 +198,4 @@ pub async fn lex_string(input: String) -> Vec<Span<Token>> {
     }
 
     token_stream
-}
-
-
-#[cfg(test)]
-mod tests {
-    #[test]
-
 }

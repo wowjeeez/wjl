@@ -1,2 +1,2 @@
 [workspace]
-members = [ "ast", "common","lexer", "toolchain"]
+members = ["common","lexer", "parser", "toolchain"]

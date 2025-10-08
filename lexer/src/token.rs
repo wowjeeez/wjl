@@ -10,6 +10,7 @@ pub enum Token {
     R_BRACKET,
     L_ANGLE,
     R_ANGLE,
+    D_COLON,
     EQ,
     EXCL,
     QMARK,
@@ -79,7 +80,21 @@ impl Token {
         TokenSpan::new(start, end, self)
     }
 
+    pub fn get_identifier(&self) -> Option<String> {
+        match self {
+            Token::IDENT(id) => Some(id.clone()),
+            _ => None,
+        }
+    }
+
     pub fn spanned_one(self, start: usize) -> Span<Token> {
         TokenSpan::new(start, start, self)
+    }
+}
+
+
+impl Default for Token {
+    fn default() -> Self {
+        Token::L_PAREN
     }
 }

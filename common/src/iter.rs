@@ -1,3 +1,5 @@
+use crate::Location;
+
 pub struct SmartIterator<T> {
     inner: Vec<T>,
     index: Option<usize>,
@@ -56,5 +58,9 @@ impl<T: PartialEq> SmartIterator<T> {
     
     pub fn peek_is_fn<E: FnOnce(&T) -> bool>(&self, rhs: E) -> bool {
         self.peek().map_or(false, rhs)
+    }
+
+    pub fn curr(&self) -> Option<&T> {
+        self.inner.get(self.get_current_index())
     }
 }

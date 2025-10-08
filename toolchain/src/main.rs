@@ -1,10 +1,12 @@
+use common::iter::SmartIterator;
 use common::tokio;
 use lexer::lex_string;
+use lexer::token::Token;
+use parser::to_parse_tree;
 
 #[tokio::main]
 async fn main() {
-    let lexed_numeric = lex_string("var test = myVar + 15.3 * (helpMe - 10)".to_string()).await;
-    dbg!(lexed_numeric);
-    let lexed_text = lex_string("var test = 'Hello there $username'.join(\"Its very nice to meet you\")".to_string()).await;
-    dbg!(lexed_text);
+    let lexed_text = lex_string("function tgt::lib.test<A>(i: int): A {return i.str()} ".to_string()).await;
+    let lexed_text = lexed_text.into_iter().filter(|x| x.get() != &Token::WHITESPACE_MERGED).collect();
+    let parse_tree = to_parse_tree(lexed_text).expect("err");
 }
