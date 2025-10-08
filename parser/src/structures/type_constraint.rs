@@ -2,6 +2,7 @@ use common::LocationDataProvider;
 use common::span::Span;
 use lexer::token::Token;
 use crate::errors::ParseError;
+use crate::structures::function::parse_func_arguments;
 use crate::structures::literal_expr::{parse_literal_expr, parse_single_literal};
 use crate::structures::object::{parse_object_dynamic_key, ObjectKey};
 use crate::structures::qualified_ident::{parse_qualified_ident, Identifier};
@@ -14,7 +15,12 @@ pub enum TypeConstraint {
     ConstBooleanTypeTrue,
     ConstBooleanTypeFalse,
     ConstNullType,
-    ConstExpr(())
+    ConstExpr(()),
+    ConstructorType(()),
+    And(Span<Box<TypeConstraint>>, Span<Box<TypeConstraint>>),
+    Or(Span<Box<TypeConstraint>>, Span<Box<TypeConstraint>>),
+    Ternary(Span<Box<TypeConstraint>>, Span<Box<TypeConstraint>>, Span<Box<TypeConstraint>>),
+    Extends(Span<Box<TypeConstraint>>, Span<Box<TypeConstraint>>),
 }
 
 pub fn parse_type_constraint(smart_iterator: &mut TokenIter) -> Result<Span<TypeConstraint>, ParseError> {
@@ -54,8 +60,44 @@ pub fn parse_type_constraint(smart_iterator: &mut TokenIter) -> Result<Span<Type
         return Err(ParseError::ExpectedType(location, smart_iterator.0.peek().map(|x| x.get().clone())))
     };
 
+    if smart_iterator.0.peek_is_fn(|x| x.get() == &Token::PIPE || x.get() == &Token::AMP) {
+        let (joiner, _) = smart_iterator.0.next().unwrap();
+        let joiner = joiner.clone();
+        let right = parse_type_constraint(smart_iterator)?;
+        let start = first_part.start();
+        let end = right.end();
+        let constraint = if joiner.get() == &Token::PIPE {
+            TypeConstraint::Or(first_part.boxed(), right.boxed())
+        } else {
+            TypeConstraint::And(first_part.boxed(), right.boxed())
+        };
+        return Ok(Span::new(start, end, constraint))
+    }
 
-    Ok(())
+
+    if smart_iterator.0.peek_is_fn(|x| x.get() == &Token::COLON) {
+        let constraint = parse_type_constraint(smart_iterator)?;
+        let location = smart_iterator.get_location();
+        let (next, _) = smart_iterator.0.next().ok_or(ParseError::ExpectedToken(location, Token::QMARK, None))?;
+        let next = next.clone();
+        if next.get() != &Token::QMARK {
+            return Ok(Span::new(first_part.start(), constraint.end(), TypeConstraint::Extends(first_part.boxed(), constraint.boxed())))
+        }
+        let truthy = parse_type_constraint(smart_iterator)?;
+        let location = smart_iterator.get_location();
+        let (next, _) = smart_iterator.0.next().ok_or(ParseError::ExpectedToken(location, Token::COLON, None))?;
+        let next = next.clone();
+        if next.get() != &Token::COLON {
+            let next = next.get().clone();
+            let location = smart_iterator.get_location();
+            return Err(ParseError::ExpectedToken(location, Token::COLON, Some(next)))
+        }
+        let falsy = parse_type_constraint(smart_iterator)?;
+        return Ok(Span::new(first_part.start(), falsy.end(), TypeConstraint::Ternary(first_part.boxed(), truthy.boxed(), falsy.boxed())))
+    }
+
+    Ok(first_part)
+
 }
 
 
@@ -131,5 +173,8 @@ pub fn parse_object_type(smart_iterator: &mut TokenIter) -> Result<Span<TypeCons
 
 
 pub fn parse_constructor_type(smart_iterator: &mut TokenIter) -> Result<Span<TypeConstraint>, ParseError> {
+    let (new_token, _) = smart_iterator.0.next().unwrap();
+    let new_token = new_token.clone();
+    let args = parse_func_arguments(smart_iterator)?;
     Ok(())
 }

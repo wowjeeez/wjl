@@ -1,3 +1,4 @@
+use common::iter::SmartIterator;
 use common::LocationDataProvider;
 use lexer::token::TokenSpan;
 use crate::errors::ParseError;
@@ -13,10 +14,11 @@ pub fn parse_func_decl(smart_iterator: &mut TokenIter, root: TokenSpan) -> Resul
     let name_start = name_start.clone();
     let qualified_name = parse_qualified_ident(smart_iterator, name_start)?;
     dbg!(&qualified_name);
+    let args = parse_func_arguments(smart_iterator)?;
     return Ok(())
 
+}
 
-
-
-
+pub fn parse_func_arguments(smart_iterator: &mut TokenIter) -> Result<(), ParseError> {
+    Ok(())
 }
