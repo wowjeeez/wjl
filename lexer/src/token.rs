@@ -11,7 +11,7 @@ pub enum Token {
     L_ANGLE,
     R_ANGLE,
     D_COLON,
-    EQ,
+    ASSIGN,
     EXCL,
     QMARK,
     SUM,

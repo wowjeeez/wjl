@@ -31,5 +31,8 @@ pub enum ParseError {
     InvalidGeneric(Location<Token>),
 
     #[error("invalid generic argument name")]
-    InvalidGenericArgumentNameNaive()
+    InvalidGenericArgumentNameNaive(),
+
+    #[error("invalid argument name")]
+    InvalidArgumentName(Location<Token>),
 }

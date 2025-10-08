@@ -4,3 +4,6 @@ mod generic_constraint;
 mod type_expr;
 mod lexical_expr;
 mod object_type;
+mod object;
+mod variable;
+mod array;

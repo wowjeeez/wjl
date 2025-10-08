@@ -162,7 +162,7 @@ pub async fn lex_string(input: String) -> Vec<Span<Token>> {
             ']' => Token::R_BRACKET,
             '<' => Token::L_ANGLE,
             '>' => Token::R_ANGLE,
-            '=' => Token::EQ,
+            '=' => Token::ASSIGN,
             '!' => Token::EXCL,
             '?' => Token::QMARK,
             '+' => Token::SUM,

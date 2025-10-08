@@ -1,10 +1,15 @@
+use std::process::id;
 use common::iter::SmartIterator;
 use common::LocationDataProvider;
 use common::span::Span;
 use lexer::token::{Token, TokenSpan};
 use crate::errors::ParseError;
+use crate::structures::array::parse_array_decl;
+use crate::structures::lexical_expr::{parse_expr, Expression};
+use crate::structures::object::parse_object_decl;
 use crate::structures::qualified_ident::{parse_qualified_ident, Identifier};
 use crate::structures::type_expr::{parse_type_expression, TypeExpression};
+use crate::structures::variable::VariableName;
 use crate::TokenIter;
 
 pub fn parse_func_decl(smart_iterator: &mut TokenIter, root: TokenSpan) -> Result<(), ParseError> {
@@ -29,9 +34,18 @@ pub fn parse_func_signature(smart_iterator: &mut TokenIter, name: Span<Identifie
     };
 
     let location = smart_iterator.get_location();
-    if smart_iterator.0.peek_is_fn(|x| x.get() != &Token::L_PAREN) {
+    let next = smart_iterator.0.next();
+    if next.is_none() {
         return Err(ParseError::ExpectedOneOf(location, vec![Token::L_PAREN, if generics.is_none() {Token::L_ANGLE} else {Token::L_PAREN}], None))
     }
+    let (next, _) = next.unwrap();
+    let next = next.clone();
+    if next.get() != &Token::L_PAREN {
+        return Err(ParseError::ExpectedOneOf(location, vec![Token::L_PAREN, if generics.is_none() {Token::L_ANGLE} else {Token::L_PAREN}], Some(next.get().clone())))
+    }
+
+    let args = parse_args(smart_iterator, next)?;
+
     Ok(())
 }
 
@@ -104,9 +118,55 @@ pub fn parse_generic_args(smart_iterator: &mut TokenIter) -> Result<Span<Vec<Spa
 }
 
 
-pub fn parse_args(smart_iterator: &mut TokenIter) -> Result<(), ParseError> {
+pub fn parse_args(smart_iterator: &mut TokenIter, paren: TokenSpan) -> Result<Span<Vec<(VariableName, Span<TypeExpression>, Option<Span<Expression>>)>>, ParseError> {
+    let mut args = vec![];
+    loop {
+        if smart_iterator.0.peek_is_fn(|x| x.get() == &Token::R_PAREN) {
+            let (next, _) = smart_iterator.0.next().unwrap();
+            return Ok(Span::new(paren.start(), next.end(), args))
+        }
+        let location = smart_iterator.get_location();
+        let binding = if smart_iterator.0.peek_is_fn(|x| x.get().is_ident()) {
+            let (next, _) = smart_iterator.0.next().unwrap();
+            let next = next.clone();
+            let ident = parse_qualified_ident(smart_iterator, next)?;
+            let location = smart_iterator.get_location();
+            match ident.get() {
+                &Identifier::TAIL(_) => Ok(VariableName::Ident(ident)),
+                _ => Err(ParseError::InvalidArgumentName(location))
+            }
+        } else if smart_iterator.0.peek_is_fn(|x| x.get() == &Token::L_CURLY) {
+            parse_object_decl(smart_iterator);
+            Ok(VariableName::ObjectDestructuring())
+        } else if smart_iterator.0.peek_is_fn(|x| x.get() == &Token::L_BRACKET) {
+            parse_array_decl(smart_iterator);
+            Ok(VariableName::ArrayDestructuring())
+        } else {
+            return Err(ParseError::ExpectedOneOf(location, vec![Token::L_BRACKET, Token::L_CURLY, Token::IDENT("".to_string())], smart_iterator.0.peek().as_ref().map(|x| x.get().clone())))
+        }?;
 
-}
-pub fn parse_single_argument(smart_iterator: &mut TokenIter) -> Result<(), ParseError> {
-    Ok(())
+        let (next, _) = smart_iterator.0.next().ok_or(ParseError::ExpectedToken(location, Token::COLON, None))?;
+        let next = next.clone();
+        if next.get() != &Token::COLON {
+            let next = next.get().clone();
+            let location = smart_iterator.get_location();
+            return Err(ParseError::ExpectedToken(location, Token::COLON, Some(next)))
+        }
+
+        let ty = parse_type_expression(smart_iterator)?;
+        let location = smart_iterator.get_location();
+        let (next, _) = smart_iterator.0.next().ok_or(ParseError::ExpectedClosureOrComma(location, Token::R_PAREN, None))?;
+        let next = next.clone();
+        let default_value = if next.get() == &Token::ASSIGN {
+            Some(parse_expr(smart_iterator)?)
+        } else {None};
+
+        args.push((binding, ty, default_value));
+        if next.get() != &Token::COMMA && next.get() != &Token::R_PAREN {
+            let next = next.get().clone();
+            let location = smart_iterator.get_location();
+            return Err(ParseError::ExpectedClosureOrComma(location, Token::R_PAREN, Some(next)))
+        }
+
+    }
 }

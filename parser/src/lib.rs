@@ -34,7 +34,7 @@ pub fn to_parse_tree(token_stream: Vec<Span<Token>>) -> Result<(), ParseError> {
         Token::R_BRACKET => {}
         Token::L_ANGLE => {}
         Token::R_ANGLE => {}
-        Token::EQ => {}
+        Token::ASSIGN => {}
         Token::EXCL => {}
         Token::QMARK => {}
         Token::SUM => {}

@@ -33,6 +33,6 @@ pub fn parse_literal_expr(smart_iterator: &mut TokenIter, start: TokenSpan) -> R
     return Ok(())
 }
 
-pub fn parse_expr(smart_iterator: &mut TokenIter, start: TokenSpan) -> Result<Span<Expression>, ParseError> {
+pub fn parse_expr(smart_iterator: &mut TokenIter) -> Result<Span<Expression>, ParseError> {
     Ok(())
 }
