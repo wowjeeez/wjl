@@ -96,6 +96,7 @@ pub fn parse_object_type(smart_iterator: &mut TokenIter) -> Result<Span<TypeCons
     loop {
         let key = if smart_iterator.0.peek_is_fn(|x| x.get().is_any_literal() || x.get().is_ident()) {
             let (key, _) = smart_iterator.0.next().unwrap();
+            let key = key.clone();
             if key.get().is_ident() {
                 Span::new(key.start(), key.end(), ObjectKey::Label(key.get().get_identifier().unwrap()))
             } else {
