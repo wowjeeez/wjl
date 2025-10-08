@@ -66,6 +66,7 @@ pub async fn lex_string(input: String) -> Vec<Span<Token>> {
                         "use" => Token::KEYWORD_USE,
                         "native" => Token::KEYWORD_NATIVE,
                         "define" => Token::KEYWORD_DEFINE,
+                        "null" => Token::KEYWORD_NULL,
                         _ => token
                     }
                 }

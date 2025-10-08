@@ -1,4 +1,3 @@
-use common::iter::SmartIterator;
 use common::tokio;
 use lexer::lex_string;
 use lexer::token::Token;

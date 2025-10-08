@@ -4,7 +4,7 @@ use lexer::token::{Token, TokenSpan};
 use crate::errors::ParseError;
 use crate::TokenIter;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Identifier {
     STATIC(String, Option<Span<Box<Identifier>>>),
     INSTANCE(String, Option<Span<Box<Identifier>>>),

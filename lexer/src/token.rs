@@ -69,7 +69,8 @@ pub enum Token {
     KEYWORD_USE,
     KEYWORD_NATIVE,
     KEYWORD_DEFINE,
-    WHITESPACE_MERGED
+    WHITESPACE_MERGED,
+    KEYWORD_NULL
 }
 
 pub type TokenSpan = Span<Token>;
@@ -84,6 +85,21 @@ impl Token {
         match self {
             Token::IDENT(id) => Some(id.clone()),
             _ => None,
+        }
+    }
+
+    pub fn is_ident(&self) -> bool {
+        match &self {
+            Token::IDENT(_) => true,
+            _ => false
+        }
+    }
+
+    pub fn is_any_literal(&self) -> bool {
+        match &self {
+            &Token::B_NUMBER(_) | &Token::D_NUMBER(_) | &Token::O_NUMBER(_) | &Token::H_NUMBER(_) | &Token::FD_NUMBER(_) => true,
+            &Token::D_LITERAL(_, _) | &Token::S_LITERAL(_, _) => true,
+            _ => false
         }
     }
 
