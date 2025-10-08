@@ -23,4 +23,13 @@ pub enum ParseError {
 
     #[error("expected token {1:?} but got {2:?} instead")]
     ExpectedToken(Location<Token>, Token, Option<Token>),
+
+    #[error("expected one of tokens {1:?} but got {2:?} instead")]
+    ExpectedOneOf(Location<Token>, Vec<Token>, Option<Token>),
+
+    #[error("invalid generic argument")]
+    InvalidGeneric(Location<Token>),
+
+    #[error("invalid generic argument name")]
+    InvalidGenericArgumentNameNaive()
 }

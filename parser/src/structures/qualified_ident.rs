@@ -6,9 +6,9 @@ use crate::TokenIter;
 
 #[derive(Debug, Clone)]
 pub enum Identifier {
-    STATIC(String, Option<Span<Box<Identifier>>>),
-    INSTANCE(String, Option<Span<Box<Identifier>>>),
-    TAIL(String, Option<Span<Box<Identifier>>>),
+    STATIC(String, Span<Box<Identifier>>),
+    INSTANCE(String, Span<Box<Identifier>>),
+    TAIL(String),
 }
 
 pub fn parse_qualified_ident(smart_iterator: &mut TokenIter, start: TokenSpan) -> Result<Span<Identifier>, ParseError> {
@@ -24,12 +24,12 @@ pub fn parse_qualified_ident(smart_iterator: &mut TokenIter, start: TokenSpan) -
         let next = next.clone();
         let next_ident = parse_qualified_ident(smart_iterator, next.clone())?;
         let ident = match next_connector.get() {
-            &Token::PERIOD => Identifier::INSTANCE(content, Some(next_ident.boxed())),
-            &Token::D_COLON => Identifier::STATIC(content, Some(next_ident.boxed())),
+            &Token::PERIOD => Identifier::INSTANCE(content, next_ident.boxed()),
+            &Token::D_COLON => Identifier::STATIC(content, next_ident.boxed()),
             _ => unreachable!(),
         };
 
         return Ok(Span::new(start.start(), next_connector.end(), ident))
     }
-    Ok(Span::new(start.start(), start.end(), Identifier::TAIL(content, None)))
+    Ok(Span::new(start.start(), start.end(), Identifier::TAIL(content)))
 }

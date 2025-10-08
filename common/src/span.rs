@@ -54,6 +54,17 @@ impl <T> Span<T> {
 }
 
 
+impl <T: Clone> Span<Box<T>> {
+    pub fn unbox(&self) -> Span<T> {
+        let cloned = self.content.as_ref().clone();
+        Span {
+            start_index: self.start_index,
+            end_index: self.end_index,
+            content: cloned,
+        }
+    }
+}
+
 impl <T: Clone> Span<T> {
     pub fn get_cloned(&self) -> T {
         self.content.clone()
