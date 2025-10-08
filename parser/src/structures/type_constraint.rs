@@ -10,7 +10,7 @@ use crate::TokenIter;
 pub enum TypeConstraint {
     Identifier(Identifier),
     FixedArrayType(Vec<Span<TypeConstraint>>),
-    ObjectType(),
+    ObjectType(Vec<(Span<ObjectKey>, Span<TypeConstraint>)>),
     ConstBooleanTypeTrue,
     ConstBooleanTypeFalse,
     ConstNullType,
@@ -92,6 +92,7 @@ pub fn parse_array_type(smart_iterator: &mut TokenIter) -> Result<Span<TypeConst
 pub fn parse_object_type(smart_iterator: &mut TokenIter) -> Result<Span<TypeConstraint>, ParseError> {
     let (brace_open, _) = smart_iterator.0.next().unwrap();
     let brace_open = brace_open.clone();
+    let mut elements = vec![];
     loop {
         let key = if smart_iterator.0.peek_is_fn(|x| x.get().is_any_literal() || x.get().is_ident()) {
             let (key, _) = smart_iterator.0.next().unwrap();
@@ -105,11 +106,26 @@ pub fn parse_object_type(smart_iterator: &mut TokenIter) -> Result<Span<TypeCons
             let key = parse_object_dynamic_key(smart_iterator)?;
             Span::new(key.start(), key.end(), ObjectKey::Dynamic(key.get().clone()))
         };
-        let next = smart_iterator.0.next(); //TODO! check if colon or } if not then error and exit
+        let location = smart_iterator.get_location();
+        let (next, _) = smart_iterator.0.next().ok_or(ParseError::ExpectedToken(location, Token::COLON, None))?;
+        let next = next.clone();
+        if next.get() != &Token::COLON {
+            let location = smart_iterator.get_location();
+            return Err(ParseError::ExpectedToken(location, Token::COLON, Some(next.get().clone())));
+        }
+        let binding = parse_type_constraint(smart_iterator)?;
+        elements.push((key, binding));
+        let location = smart_iterator.get_location();
+        let (next, _) = smart_iterator.0.next().ok_or(ParseError::ExpectedClosureOrComma(location, Token::R_CURLY, None))?;
+        let next = next.clone();
+        if next.get() == &Token::R_CURLY {
+            return Ok(Span::new(brace_open.start(), next.end(), TypeConstraint::ObjectType(elements)))
+        }
+        if next.get() != &Token::COMMA {
+            let location = smart_iterator.get_location();
+            return Err(ParseError::ExpectedClosureOrComma(location, Token::R_CURLY, Some(next.get().clone())))
+        }
     }
-
-
-    Ok(())
 }
 
 

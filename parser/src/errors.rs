@@ -20,4 +20,7 @@ pub enum ParseError {
 
     #[error("expected closing {1:?} but got {2:?} instead")]
     ExpectedClosure(Location<Token>, Token, Option<Token>),
+
+    #[error("expected token {1:?} but got {2:?} instead")]
+    ExpectedToken(Location<Token>, Token, Option<Token>),
 }
