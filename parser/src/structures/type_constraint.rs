@@ -2,13 +2,14 @@ use common::LocationDataProvider;
 use common::span::Span;
 use lexer::token::Token;
 use crate::errors::ParseError;
-use crate::structures::literal_expr::parse_literal_expr;
+use crate::structures::literal_expr::{parse_literal_expr, parse_single_literal};
+use crate::structures::object::{parse_object_dynamic_key, ObjectKey};
 use crate::structures::qualified_ident::{parse_qualified_ident, Identifier};
 use crate::TokenIter;
 
 pub enum TypeConstraint {
     Identifier(Identifier),
-    ArrayType(),
+    FixedArrayType(Vec<Span<TypeConstraint>>),
     ObjectType(),
     ConstBooleanTypeTrue,
     ConstBooleanTypeFalse,
@@ -16,7 +17,7 @@ pub enum TypeConstraint {
     ConstExpr(())
 }
 
-pub fn parse_type_constraint(smart_iterator: &mut TokenIter) -> Result<(), ParseError> {
+pub fn parse_type_constraint(smart_iterator: &mut TokenIter) -> Result<Span<TypeConstraint>, ParseError> {
     let first_part = if smart_iterator.0.peek_is_fn(|t| t.get().is_ident()) {
         let (start, _) = smart_iterator.0.next().unwrap();
         let start = start.clone();
@@ -59,15 +60,58 @@ pub fn parse_type_constraint(smart_iterator: &mut TokenIter) -> Result<(), Parse
 
 
 pub fn parse_array_type(smart_iterator: &mut TokenIter) -> Result<Span<TypeConstraint>, ParseError> {
-
-    Ok(())
+    let (start, _) = smart_iterator.0.next().unwrap();
+    let start = start.clone();
+    let entry = parse_type_constraint(smart_iterator)?;
+    let location = smart_iterator.get_location();
+    let (next, _) = smart_iterator.0.next().ok_or(ParseError::ExpectedClosureOrComma(location, Token::R_BRACKET, None))?;
+    if next.get() == &Token::R_BRACKET {
+        return Ok(Span::new(start.start(), next.end(), TypeConstraint::FixedArrayType(vec![entry])))
+    }
+    if next.get() == &Token::COMMA {
+        let mut elements = vec![entry];
+        loop {
+            let entry = parse_type_constraint(smart_iterator)?;
+            elements.push(entry);
+            let location = smart_iterator.get_location();
+            let (next, _) = smart_iterator.0.next().ok_or(ParseError::ExpectedClosureOrComma(location, Token::R_BRACKET, None))?;
+            if next.get() == &Token::R_BRACKET {
+                return Ok(Span::new(start.start(), next.end(), TypeConstraint::FixedArrayType(elements)))
+            }
+            if next.get() != &Token::COMMA {
+                let location = smart_iterator.get_location();
+                return Err(ParseError::ExpectedClosureOrComma(location, Token::R_BRACKET, None))
+            }
+        }
+    }
+    let next = next.get().clone();
+    let location = smart_iterator.get_location();
+    Err(ParseError::ExpectedClosureOrComma(location, Token::R_BRACKET, Some(next)))
 }
 
 pub fn parse_object_type(smart_iterator: &mut TokenIter) -> Result<Span<TypeConstraint>, ParseError> {
+    let (brace_open, _) = smart_iterator.0.next().unwrap();
+    let brace_open = brace_open.clone();
+    loop {
+        let key = if smart_iterator.0.peek_is_fn(|x| x.get().is_any_literal() || x.get().is_ident()) {
+            let (key, _) = smart_iterator.0.next().unwrap();
+            if key.get().is_ident() {
+                Span::new(key.start(), key.end(), ObjectKey::Label(key.get().get_identifier().unwrap()))
+            } else {
+                let literal = parse_single_literal(smart_iterator, key.clone())?;
+                Span::new(literal.start(), literal.end(), ObjectKey::SingleLiteral(literal.get().clone()))
+            }
+        } else {
+            let key = parse_object_dynamic_key(smart_iterator)?;
+            Span::new(key.start(), key.end(), ObjectKey::Dynamic(key.get().clone()))
+        };
+        let next = smart_iterator.0.next(); //TODO! check if colon or } if not then error and exit
+    }
+
 
     Ok(())
 }
-u
+
 
 pub fn parse_constructor_type(smart_iterator: &mut TokenIter) -> Result<Span<TypeConstraint>, ParseError> {
     Ok(())

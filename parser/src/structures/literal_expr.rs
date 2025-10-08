@@ -9,3 +9,12 @@ pub fn parse_literal_expr(smart_iterator: &mut TokenIter, start: TokenSpan) -> R
 
     return Ok(())
 }
+
+#[derive(Debug, Clone)]
+pub enum SingleLiteral {
+
+}
+
+pub fn parse_single_literal(smart_iterator: &mut TokenIter, lit: TokenSpan) -> Result<Span<SingleLiteral>, ParseError> {
+
+}

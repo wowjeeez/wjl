@@ -94,7 +94,8 @@ pub fn to_parse_tree(token_stream: Vec<Span<Token>>) -> Result<(), ParseError> {
         Token::KEYWORD_DEFINE => {}
         Token::WHITESPACE_MERGED => {}
         Token::D_COLON => {}
-        Token::KEYWORD_NULL => {}
+        Token::KEYWORD_NULL => {},
+        Token::COMMA => {}
     };
 
     Ok(())

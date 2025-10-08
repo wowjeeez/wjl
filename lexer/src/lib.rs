@@ -177,6 +177,7 @@ pub async fn lex_string(input: String) -> Vec<Span<Token>> {
             '.' => Token::PERIOD,
             '#' => Token::HASH,
             '@' => Token::AT,
+            ',' => Token::COMMA,
             _ => Token::WHITESPACE_MERGED,
         };
         if op != Token::WHITESPACE_MERGED {

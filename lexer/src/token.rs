@@ -25,6 +25,7 @@ pub enum Token {
     AT,
     SEMICOLON,
     PERIOD,
+    COMMA,
     HASH,
     IDENT(String),
     D_LITERAL(String, bool),
