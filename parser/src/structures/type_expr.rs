@@ -5,12 +5,12 @@ use crate::errors::ParseError;
 use crate::structures::function::parse_func_signature;
 use crate::structures::lexical_expr::{parse_string_literal, Expression};
 use crate::structures::object_type::{parse_object_dynamic_key_type, ObjectKeyType};
-use crate::structures::qualified_ident::{parse_ident_no_expr, Identifier};
+use crate::structures::qualified_ident::parse_ident;
 use crate::TokenIter;
 
 #[derive(Debug, Clone)]
 pub enum TypeExpression {
-    Identifier(Identifier),
+    Identifier(Span<Expression>),
     FixedArrayType(Vec<Span<TypeExpression>>),
     ObjectType(Vec<(Span<ObjectKeyType>, Span<TypeExpression>)>),
     ConstBooleanTypeTrue,
@@ -31,12 +31,8 @@ pub enum TypeExpression {
 
 pub fn parse_type_expression(smart_iterator: &mut TokenIter) -> Result<Span<TypeExpression>, ParseError> {
     let first_part = if smart_iterator.0.peek_is_fn(|t| t.get().is_ident()) {
-        let (start, _) = smart_iterator.0.next().unwrap();
-        let start = start.clone();
-        let identifier = parse_ident_no_expr(smart_iterator, start)?;
-        let ident = identifier.get().clone().clone();
-
-        Span::new(identifier.start(), identifier.end(), TypeExpression::Identifier(ident))
+        let identifier = parse_ident(smart_iterator)?;
+        Span::new(identifier.start(), identifier.end(), TypeExpression::Identifier(identifier))
     } else if smart_iterator.0.peek_is_fn(|x| x.get() == &Token::L_BRACKET) {
         parse_array_type(smart_iterator)?
     } else if smart_iterator.0.peek_is_fn(|x| x.get() == &Token::L_CURLY) {
@@ -192,6 +188,6 @@ pub fn parse_object_type(smart_iterator: &mut TokenIter) -> Result<Span<TypeExpr
 pub fn parse_constructor_type(smart_iterator: &mut TokenIter) -> Result<Span<TypeExpression>, ParseError> {
     let (new_token, _) = smart_iterator.0.next().unwrap();
     let new_token = new_token.clone();
-    let args = parse_func_signature(smart_iterator, Span::zeroed_with(Identifier::TAIL("CTOR".to_string())))?;
+    let args = parse_func_signature(smart_iterator, Span::zeroed_with(Expression::Nonce))?;
     Ok(())
 }

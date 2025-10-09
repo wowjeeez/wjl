@@ -23,7 +23,7 @@ impl TokenIter {
         }
         None
     }
-    
+
     pub fn peek_and_next_if_fn(&mut self, predicate: impl Fn(&Token) -> bool) -> Option<TokenSpan> {
         if self.0.peek_is_fn(|x| predicate(x.get())) {
             self.0.next();
@@ -95,8 +95,8 @@ pub fn to_parse_tree(token_stream: Vec<Span<Token>>) -> Result<(), ParseError> {
         Token::PERIOD => {}
         Token::HASH => {}
         Token::IDENT(_) => {}
-        Token::D_LITERAL(_, _) => {}
-        Token::S_LITERAL(_, _) => {}
+        Token::D_LITERAL(_) => {}
+        Token::S_LITERAL(_) => {}
         Token::D_NUMBER(_) => {}
         Token::B_NUMBER(_) => {}
         Token::H_NUMBER(_) => {}

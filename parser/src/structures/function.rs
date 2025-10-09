@@ -8,7 +8,7 @@ use crate::structures::array::parse_array_decl;
 use crate::structures::block::CodeBlock;
 use crate::structures::lexical_expr::{parse_expr, Expression};
 use crate::structures::object::parse_object_decl;
-use crate::structures::qualified_ident::{parse_ident_no_expr, Identifier};
+use crate::structures::qualified_ident::{parse_ident};
 use crate::structures::type_expr::{parse_type_expression, TypeExpression};
 use crate::structures::variable::VariableName;
 use crate::TokenIter;
@@ -19,27 +19,21 @@ pub fn parse_async_func_decl(smart_iterator: &mut TokenIter) -> Result<(), Parse
 }
 
 pub fn parse_func_decl(smart_iterator: &mut TokenIter, root: TokenSpan) -> Result<(), ParseError> {
-    let start_location = smart_iterator.get_location();
-    let (name_start, index) = smart_iterator
-        .0
-        .next()
-        .ok_or(ParseError::ExpectedIdentifier(start_location, None))?;
-    let name_start = name_start.clone();
-    let qualified_name = parse_ident_no_expr(smart_iterator, name_start)?;
+    let qualified_name = parse_ident(smart_iterator)?;
     let args = parse_func_signature(smart_iterator, qualified_name)?;
     return Ok(())
 
 }
 #[derive(Debug, Clone)]
 pub struct FunctionDeclaration {
-    name: Span<Identifier>,
+    name: Span<Expression>,
     generics: Option<Span<Vec<Span<TypeExpression>>>>,
     args: Span<Vec<(VariableName, Span<TypeExpression>, Option<Span<Expression>>)>>,
     return_type: Option<Span<TypeExpression>>,
     body: CodeBlock
 }
 
-pub fn parse_func_signature(smart_iterator: &mut TokenIter, name: Span<Identifier>) -> Result<(), ParseError> {
+pub fn parse_func_signature(smart_iterator: &mut TokenIter, name: Span<Expression>) -> Result<(), ParseError> {
     let location = smart_iterator.get_location();
     let generics = if smart_iterator.0.peek_is_fn(|x| x.get() == &Token::L_ANGLE) {
         Some(parse_generic_args(smart_iterator)?)
@@ -68,38 +62,6 @@ pub struct GenericArg {
     name: String,
 }
 
-impl GenericArg {
-    //TODO! rebuild this later to also turn the generic arg into a more easy to read format for later stages
-    pub fn validate_expr(expr: &TypeExpression) -> Result<(), ParseError> {
-        let arg = match expr {
-            TypeExpression::Identifier(ident) => GenericArg::validate_ident(ident),
-            TypeExpression::Extends(name, extension) => match name.get().as_ref().clone() {
-                TypeExpression::Identifier(name) => GenericArg::validate_ident(&name),
-                _ => Err(ParseError::InvalidGenericArgumentNameNaive())
-            },
-            TypeExpression::Ternary(name, _, falsy) => match name.get().as_ref().clone() {
-                TypeExpression::Extends(name, _) => match name.get().as_ref().clone() {
-                    TypeExpression::Identifier(name) => GenericArg::validate_ident(&name),
-                    _ => Err(ParseError::InvalidGenericArgumentNameNaive())
-                },
-                _ => Err(ParseError::InvalidGenericArgumentNameNaive())
-            },
-            _ => Err(ParseError::InvalidGenericArgumentNameNaive())
-        }?;
-
-        Ok(())
-
-    }
-
-    fn validate_ident(ident: &Identifier) -> Result<GenericArg, ParseError> {
-        match ident {
-            Identifier::STATIC(_, _) | Identifier::INSTANCE(_, _) => Err(ParseError::InvalidGenericArgumentNameNaive()),
-            Identifier::TAIL(value, ) => Ok(GenericArg {
-                name: value.clone(),
-            })
-        }
-    }
-}
 
 
 pub fn parse_generic_args(smart_iterator: &mut TokenIter) -> Result<Span<Vec<Span<TypeExpression>>>, ParseError> {
@@ -112,7 +74,6 @@ pub fn parse_generic_args(smart_iterator: &mut TokenIter) -> Result<Span<Vec<Spa
             TypeExpression::Identifier(_) | TypeExpression::Ternary(_, _, _) | TypeExpression::Extends(_, _) => true,
             _ => false
         };
-        GenericArg::validate_expr(constraint.get())?;
         let location  = smart_iterator.get_location();
         if !valid {
             return Err(ParseError::InvalidGeneric(location))
@@ -141,14 +102,8 @@ pub fn parse_args(smart_iterator: &mut TokenIter, paren: TokenSpan) -> Result<Sp
         }
         let location = smart_iterator.get_location();
         let binding = if smart_iterator.0.peek_is_fn(|x| x.get().is_ident()) {
-            let (next, _) = smart_iterator.0.next().unwrap();
-            let next = next.clone();
-            let ident = parse_ident_no_expr(smart_iterator, next)?;
-            let location = smart_iterator.get_location();
-            match ident.get() {
-                &Identifier::TAIL(_) => Ok(VariableName::Ident(ident)),
-                _ => Err(ParseError::InvalidArgumentName(location))
-            }
+            let ident = parse_ident(smart_iterator)?;
+            Ok(VariableName::Ident(ident))
         } else if smart_iterator.0.peek_is_fn(|x| x.get() == &Token::L_CURLY) {
             parse_object_decl(smart_iterator);
             Ok(VariableName::ObjectDestructuring())

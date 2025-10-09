@@ -8,7 +8,7 @@ use crate::errors::ParseError;
 use crate::structures::array::parse_array_decl;
 use crate::structures::function::{parse_async_func_decl, parse_func_decl};
 use crate::structures::object::{parse_object_decl, ObjectField};
-use crate::structures::qualified_ident::{parse_ident, parse_ident_no_expr, Identifier};
+use crate::structures::qualified_ident::{parse_ident, PathNode};
 use crate::structures::type_expr::TypeExpression;
 use crate::TokenIter;
 
@@ -62,6 +62,7 @@ impl Operand {
 
 #[derive(Debug, Clone)]
 pub enum Expression {
+    Nonce,
     Literal(Literal),
     Logical(Span<Box<Expression>>, Span<Operand>, Span<Box<Expression>>),
     Paren(Span<Box<Expression>>),
@@ -87,6 +88,7 @@ pub enum Expression {
     ReflectBlock(),
     NullExpr,
     HashExpr(Span<Box<Expression>>),
+    Ident(Vec<Span<PathNode>>)
 }
 
 pub fn parse_string_literal(smart_iterator: &mut TokenIter) -> Result<Span<Expression>, ParseError> {

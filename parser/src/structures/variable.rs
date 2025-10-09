@@ -1,9 +1,9 @@
 use common::span::Span;
-use crate::structures::qualified_ident::Identifier;
+use crate::structures::lexical_expr::Expression;
 
 #[derive(Debug, Clone)]
 pub enum VariableName {
-    Ident(Span<Identifier>),
+    Ident(Span<Expression>),
     ObjectDestructuring(),
     ArrayDestructuring(),
 }
