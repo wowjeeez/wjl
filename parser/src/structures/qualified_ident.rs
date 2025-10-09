@@ -113,5 +113,5 @@ pub fn parse_ident(smart_iterator: &mut TokenIter) -> Result<Span<Expression>, P
         }
     }
     let last = parts.last().unwrap().end();
-    Ok(Span::new(start, last, Expression::Ident(parts)))
+    Ok(Span::new(start, last, Expression::PropertyAccess(parts)))
 }

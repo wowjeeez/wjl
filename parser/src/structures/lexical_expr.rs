@@ -1,14 +1,16 @@
+use std::collections::HashMap;
 use std::fmt::Write;
 use common::iter::SmartIterator;
 use common::LocationDataProvider;
 use common::span::Span;
 use lexer::lex_string;
 use lexer::token::{Token, TokenSpan};
+use lexer::token::Token::QMARK;
 use crate::errors::ParseError;
 use crate::structures::array::parse_array_decl;
 use crate::structures::function::{parse_async_func_decl, parse_func_decl};
 use crate::structures::object::{parse_object_decl, ObjectField};
-use crate::structures::qualified_ident::{parse_ident, PathNode};
+use crate::structures::qualified_ident::{parse_ident, ChainType, PathNode, PathNodeDetails};
 use crate::structures::type_expr::TypeExpression;
 use crate::TokenIter;
 
@@ -70,7 +72,7 @@ pub enum Expression {
     ArrayDecl(Span<Vec<Span<Expression>>>),
     Not(Span<Box<Expression>>),
     Reference(Span<Box<Expression>>),
-    Call(Span<Box<Expression>>, Span<Vec<TypeExpression>>, Span<Vec<Expression>>),
+    Call(Span<Box<Expression>>, Span<Vec<Expression>>),
     DecimalNumber(String),
     HexNumber(String),
     OctalNumber(String),
@@ -83,12 +85,13 @@ pub enum Expression {
     ClassExpr(),
     MatchExpr(),
     New(Span<Box<Expression>>),
+    TernaryExpr(Span<Box<Expression>>, Span<Box<Expression>>, Span<Box<Expression>>),
     TryCatchExpr(),
     Await(Span<Box<Expression>>),
     ReflectBlock(),
     NullExpr,
     HashExpr(Span<Box<Expression>>),
-    Ident(Vec<Span<PathNode>>)
+    PropertyAccess(Vec<Span<PathNode>>)
 }
 
 pub fn parse_string_literal(smart_iterator: &mut TokenIter) -> Result<Span<Expression>, ParseError> {
@@ -143,6 +146,7 @@ fn parse_expr_side(smart_iterator: &mut TokenIter) -> Result<Span<Expression>, P
         Token::L_PAREN => {
             smart_iterator.0.next();
             let expr = parse_expr(smart_iterator)?;
+            smart_iterator.next_expect_token(Token::R_PAREN)?;
             Ok(Expression::Paren(expr.boxed()))
         }
         Token::L_CURLY => {
@@ -223,13 +227,70 @@ fn parse_expr_side(smart_iterator: &mut TokenIter) -> Result<Span<Expression>, P
         _ => Err(ParseError::ExpectedExpression(location, Some(start.get().clone())))
     }?;
     let expr_end = smart_iterator.0.get_next_index() -1;
-    Ok(Span::new(start.start(), expr_end, expr))
+    if smart_iterator.peek_and_next_if_fn(|x| x == &Token::L_PAREN).is_some() {
+        Ok(parse_call_expr(smart_iterator, Span::new(start.start(), expr_end, expr))?)
+    } else {
+        Ok(Span::new(start.start(), expr_end, expr))
+    }
 }
 
 fn parse_call_expr(smart_iterator: &mut TokenIter, receiver: Span<Expression>) -> Result<Span<Expression>, ParseError> {
 
 }
+#[derive(Clone, Eq, PartialEq)]
+enum ReparseModifiers {
+    NonNullAssertion,
+    OptionalChain
+}
 
+fn parse_ternary(smart_iterator: &mut TokenIter, condition: Span<Expression>) -> Result<Span<Expression>, ParseError> {
+    Ok(())
+}
+
+fn reparse_postfix_expr(smart_iterator: &mut TokenIter, expression: Span<Expression>, modifiers: Vec<ReparseModifiers>) -> Result<Span<Expression>, ParseError> {
+    let next = smart_iterator.0.peek();
+    if next.is_none() {
+        return Ok(expression);
+    }
+    let next = next.unwrap();
+    let mut modifiers = modifiers.clone();
+    let reparsed = match next.get() {
+        &Token::L_PAREN => Some(parse_call_expr(smart_iterator, expression)?),
+        &Token::EXCL | &Token::QMARK if smart_iterator.0.peek_n(2).map_or(false, |x| x.get() == &Token::PERIOD || x.get() == &Token::D_COLON || x.get() == &Token::L_BRACKET || x.get() == &Token::L_PAREN) => {
+            if next.get() == &Token::QMARK {
+                //TODO! fix possible ternary clash
+                modifiers.push(ReparseModifiers::OptionalChain)
+            } else {
+                modifiers.push(ReparseModifiers::NonNullAssertion)
+            }
+            smart_iterator.0.next();
+            Some(reparse_postfix_expr(smart_iterator, expression, modifiers)?)
+        },
+        &Token::L_BRACKET | &Token::PERIOD | &Token::D_COLON => {
+            if next.get() == &Token::PERIOD || next.get() == &Token::D_COLON {
+                smart_iterator.0.next().unwrap();
+            }
+            let ident = parse_ident(smart_iterator)?;
+            let start = expression.start();
+            let first_node = PathNode::DYNAMIC(expression, PathNodeDetails {
+                chain_ahead: Some(if next.get() == &Token::D_COLON {ChainType::STATIC} else {ChainType::INSTANCE}),
+                asserted: modifiers.contains(&ReparseModifiers::NonNullAssertion),
+                optional: modifiers.contains(&ReparseModifiers::OptionalChain),
+                generic_args: None
+            });
+            let mut tail = match ident.get() {
+                Expression::PropertyAccess(ident) => ident,
+                _ => unreachable!()
+            };
+            tail.insert(0, Span::new(start, next.end(), first_node));
+            let ident = Span::new(start, ident.end(), Expression::PropertyAccess(tail.clone()));
+            Some(ident)
+        },
+        Token::QMARK => {
+            Some(parse_ternary(smart_iterator, expression)?)
+        }
+    }
+}
 
 pub fn parse_expr(smart_iterator: &mut TokenIter) -> Result<Span<Expression>, ParseError> {
     let left = parse_expr_side(smart_iterator)?;
@@ -242,7 +303,6 @@ pub fn parse_expr(smart_iterator: &mut TokenIter) -> Result<Span<Expression>, Pa
     let maybe_logical_op = smart_iterator.0.peek().ok_or(ParseError::ExpectedExpression(location, None))?;
     let maybe_logical_op = maybe_logical_op.clone();
     let maybe_logical_op_token = maybe_logical_op.get();
-
     let operand = match next.get() {
         Token::R_ANGLE =>
             if maybe_logical_op_token == &Token::ASSIGN {

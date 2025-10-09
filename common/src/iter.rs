@@ -36,6 +36,11 @@ impl<T> SmartIterator<T> {
         let new_index = self.get_next_index();
         self.inner.get(new_index)
     }
+
+    pub fn peek_n(&self, n: usize) -> Option<&T> {
+        let new_index = self.index.map_or(n, |i| i + n);
+        self.inner.get(new_index)
+    }
     
     pub fn get_previous_index(&self) -> usize {
         self.get_current_index().checked_sub(1).unwrap_or(0)
