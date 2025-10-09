@@ -84,7 +84,8 @@ pub fn parse_object_decl(smart_iterator: &mut TokenIter) -> Result<Span<Vec<Span
         if next.get() == &Token::R_CURLY {
             continue
         }
-
+        //TODO! default value (also fix it for the argument parsing because it will not move the loop ahead when a default assignment is found altough it should
+        
         //TODO! ... spread syntax
         let location = smart_iterator.get_location();
         return Err(ParseError::ExpectedClosureOrComma(location, Token::R_CURLY, Some(next.get().clone())))

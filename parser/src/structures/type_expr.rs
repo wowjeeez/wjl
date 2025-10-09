@@ -160,9 +160,7 @@ pub fn parse_object_type(smart_iterator: &mut TokenIter) -> Result<Span<TypeExpr
         let binding = parse_type_expression(smart_iterator)?;
         let location = smart_iterator.get_location();
         let (next, _) = smart_iterator.0.next().ok_or(ParseError::ExpectedClosureOrComma(location, Token::R_CURLY, None))?;
-        //TODO! default value (also fix it for the argument parsing because it will not move the loop ahead when a default assignment is found altough it should
         elements.push((key, binding));
-
         let next = next.clone();
         if next.get() == &Token::R_CURLY {
             return Ok(Span::new(brace_open.start(), next.end(), TypeExpression::ObjectType(elements)))
