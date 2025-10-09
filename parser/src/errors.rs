@@ -41,4 +41,5 @@ pub enum ParseError {
 
     #[error("expected expression got {1:?} instead")]
     ExpectedExpression(Location<Token>, Option<Token>),
+
 }

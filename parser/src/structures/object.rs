@@ -29,6 +29,7 @@ pub fn parse_object_dynamic_key(smart_iterator: &mut TokenIter) -> Result<Span<E
     Ok(Span::new(bracket_open_start, next.end(), key.get().clone()))
 }
 
+#[derive(Debug, Clone)]
 pub enum ObjectField {
     Auto(Span<String>),
     Bound(Span<String>, Span<Expression>),

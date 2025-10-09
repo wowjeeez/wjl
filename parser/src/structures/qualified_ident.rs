@@ -11,7 +11,7 @@ pub enum Identifier {
     TAIL(String),
 }
 
-pub fn parse_qualified_ident(smart_iterator: &mut TokenIter, start: TokenSpan) -> Result<Span<Identifier>, ParseError> {
+pub fn parse_ident_no_expr(smart_iterator: &mut TokenIter, start: TokenSpan) -> Result<Span<Identifier>, ParseError> {
     let content = start.get().get_identifier().ok_or(ParseError::ExpectedIdentifier(smart_iterator.get_location(), smart_iterator.0.curr().map(|x| x.get().clone())))?;
     //TODO! generics
     if smart_iterator.0.peek_is_fn(|t| t.get() == &Token::PERIOD || t.get() == &Token::D_COLON) {
@@ -22,7 +22,7 @@ pub fn parse_qualified_ident(smart_iterator: &mut TokenIter, start: TokenSpan) -
         let location = smart_iterator.get_location();
         let (next, _) = smart_iterator.0.next().ok_or(ParseError::ExpectedIdentifier(location, None))?;
         let next = next.clone();
-        let next_ident = parse_qualified_ident(smart_iterator, next.clone())?;
+        let next_ident = parse_ident_no_expr(smart_iterator, next.clone())?;
         let ident = match next_connector.get() {
             &Token::PERIOD => Identifier::INSTANCE(content, next_ident.boxed()),
             &Token::D_COLON => Identifier::STATIC(content, next_ident.boxed()),

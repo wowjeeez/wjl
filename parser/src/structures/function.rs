@@ -5,12 +5,18 @@ use common::span::Span;
 use lexer::token::{Token, TokenSpan};
 use crate::errors::ParseError;
 use crate::structures::array::parse_array_decl;
+use crate::structures::block::CodeBlock;
 use crate::structures::lexical_expr::{parse_expr, Expression};
 use crate::structures::object::parse_object_decl;
-use crate::structures::qualified_ident::{parse_qualified_ident, Identifier};
+use crate::structures::qualified_ident::{parse_ident_no_expr, Identifier};
 use crate::structures::type_expr::{parse_type_expression, TypeExpression};
 use crate::structures::variable::VariableName;
 use crate::TokenIter;
+
+
+pub fn parse_async_func_decl(smart_iterator: &mut TokenIter) -> Result<(), ParseError> {
+    Ok(())
+}
 
 pub fn parse_func_decl(smart_iterator: &mut TokenIter, root: TokenSpan) -> Result<(), ParseError> {
     let start_location = smart_iterator.get_location();
@@ -19,10 +25,18 @@ pub fn parse_func_decl(smart_iterator: &mut TokenIter, root: TokenSpan) -> Resul
         .next()
         .ok_or(ParseError::ExpectedIdentifier(start_location, None))?;
     let name_start = name_start.clone();
-    let qualified_name = parse_qualified_ident(smart_iterator, name_start)?;
+    let qualified_name = parse_ident_no_expr(smart_iterator, name_start)?;
     let args = parse_func_signature(smart_iterator, qualified_name)?;
     return Ok(())
 
+}
+#[derive(Debug, Clone)]
+pub struct FunctionDeclaration {
+    name: Span<Identifier>,
+    generics: Option<Span<Vec<Span<TypeExpression>>>>,
+    args: Span<Vec<(VariableName, Span<TypeExpression>, Option<Span<Expression>>)>>,
+    return_type: Option<Span<TypeExpression>>,
+    body: CodeBlock
 }
 
 pub fn parse_func_signature(smart_iterator: &mut TokenIter, name: Span<Identifier>) -> Result<(), ParseError> {
@@ -129,7 +143,7 @@ pub fn parse_args(smart_iterator: &mut TokenIter, paren: TokenSpan) -> Result<Sp
         let binding = if smart_iterator.0.peek_is_fn(|x| x.get().is_ident()) {
             let (next, _) = smart_iterator.0.next().unwrap();
             let next = next.clone();
-            let ident = parse_qualified_ident(smart_iterator, next)?;
+            let ident = parse_ident_no_expr(smart_iterator, next)?;
             let location = smart_iterator.get_location();
             match ident.get() {
                 &Identifier::TAIL(_) => Ok(VariableName::Ident(ident)),

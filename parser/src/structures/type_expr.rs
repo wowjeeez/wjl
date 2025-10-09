@@ -3,9 +3,9 @@ use common::span::Span;
 use lexer::token::Token;
 use crate::errors::ParseError;
 use crate::structures::function::parse_func_signature;
-use crate::structures::lexical_expr::{parse_expr, parse_literal_expr};
+use crate::structures::lexical_expr::{parse_expr, parse_literal_expr, parse_string_literal, Expression};
 use crate::structures::object_type::{parse_object_dynamic_key_type, ObjectKeyType};
-use crate::structures::qualified_ident::{parse_qualified_ident, Identifier};
+use crate::structures::qualified_ident::{parse_ident_no_expr, Identifier};
 use crate::TokenIter;
 
 #[derive(Debug, Clone)]
@@ -16,7 +16,12 @@ pub enum TypeExpression {
     ConstBooleanTypeTrue,
     ConstBooleanTypeFalse,
     ConstNullType,
-    ConstExpr(()),
+    ConstStringLiteral(Span<Expression>),
+    ConstDecimalNumber(String),
+    ConstBinaryNumber(String),
+    ConstOctalNumber(String),
+    ConstHexNumber(String),
+    ConstFloatNumber(String),
     ConstructorType(()),
     And(Span<Box<TypeExpression>>, Span<Box<TypeExpression>>),
     Or(Span<Box<TypeExpression>>, Span<Box<TypeExpression>>),
@@ -28,7 +33,7 @@ pub fn parse_type_expression(smart_iterator: &mut TokenIter) -> Result<Span<Type
     let first_part = if smart_iterator.0.peek_is_fn(|t| t.get().is_ident()) {
         let (start, _) = smart_iterator.0.next().unwrap();
         let start = start.clone();
-        let identifier = parse_qualified_ident(smart_iterator, start)?;
+        let identifier = parse_ident_no_expr(smart_iterator, start)?;
         let ident = identifier.get().clone().clone();
 
         Span::new(identifier.start(), identifier.end(), TypeExpression::Identifier(ident))
@@ -36,12 +41,22 @@ pub fn parse_type_expression(smart_iterator: &mut TokenIter) -> Result<Span<Type
         parse_array_type(smart_iterator)?
     } else if smart_iterator.0.peek_is_fn(|x| x.get() == &Token::L_CURLY) {
         parse_object_type(smart_iterator)?
-    } else if smart_iterator.0.peek_is_fn(|x| x.get().is_any_literal()) {
+    } else if smart_iterator.0.peek_is_fn(|x| x.get().is_literal()) {
+        let expr = parse_string_literal(smart_iterator)?;
+        Span::new(expr.start(), expr.end(), TypeExpression::ConstStringLiteral(expr))
+    } else if smart_iterator.0.peek_is_fn(|x| x.get().is_number()) {
         let (next, _) = smart_iterator.0.next().unwrap();
         let next = next.clone();
-        let expr = parse_literal_expr(smart_iterator, next.clone())?;
-        Span::new(next.start(), next.end(), TypeExpression::ConstExpr(expr))
-
+        let next_t = next.get().clone();
+        let expr = match next_t {
+            Token::B_NUMBER(num) => TypeExpression::ConstBinaryNumber(num),
+            Token::D_NUMBER(num) => TypeExpression::ConstDecimalNumber(num),
+            Token::O_NUMBER(num) => TypeExpression::ConstOctalNumber(num),
+            Token::H_NUMBER(num) => TypeExpression::ConstHexNumber(num),
+            Token::FD_NUMBER(num) => TypeExpression::ConstFloatNumber(num),
+            _ => unreachable!()
+        };
+        Span::new(next.start(), next.end(), expr)
     } else if smart_iterator.0.peek_is_fn(|x| x.get() == &Token::KEYWORD_TRUE) {
         let (next, _) = smart_iterator.0.next().unwrap();
         let spanned = Span::new(next.start(), next.end(), TypeExpression::ConstBooleanTypeTrue);

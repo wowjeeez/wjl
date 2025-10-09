@@ -7,7 +7,7 @@ use common::span::Span;
 use token::Token;
 use crate::token::TokenSpan;
 
-pub async fn lex_string(input: String) -> Vec<Span<Token>> {
+pub fn lex_string(input: String) -> Vec<Span<Token>> {
     let chars =  input.chars().collect::<Vec<char>>();
     let mut token_stream = vec![];
     let mut stream = SmartIterator::new(chars);
@@ -62,7 +62,6 @@ pub async fn lex_string(input: String) -> Vec<Span<Token>> {
                         "val" => Token::KEYWORD_VAL,
                         "var" => Token::KEYWORD_VAR,
                         "once" => Token::KEYWORD_ONCE,
-                        "this" => Token::KEYWORD_THIS,
                         "use" => Token::KEYWORD_USE,
                         "native" => Token::KEYWORD_NATIVE,
                         "define" => Token::KEYWORD_DEFINE,
@@ -78,19 +77,14 @@ pub async fn lex_string(input: String) -> Vec<Span<Token>> {
         if current == '"' || current == '\'' {
             let is_double = current == '"';
             let mut literal_content = String::new();
-            let mut needs_parsing = false;
             'lit: while let  Some((character, _)) = stream.next() {
                 let character = character.clone();
                 if (character == '"' && is_double) || character == '\'' {
                     break 'lit
                 }
-                if character == '$' && !stream.lookbehind_is(&'\\') && stream.peek_is(&'{') {
-                    //TODO! send the entire current + 1 into a new compilation subflow so we can calculate the matched delimiter
-                }
-                needs_parsing = needs_parsing || character == '$' && !stream.lookbehind_is(&'\\');
                 literal_content.write_char(character).unwrap();
             }
-            let token = if is_double { Token::D_LITERAL(literal_content, needs_parsing) } else {Token::S_LITERAL(literal_content, needs_parsing)};
+            let token = if is_double { Token::D_LITERAL(literal_content) } else {Token::S_LITERAL(literal_content)};
             push_t(token.spanned(current_index, stream.get_current_index()));
             continue
         }
@@ -176,6 +170,7 @@ pub async fn lex_string(input: String) -> Vec<Span<Token>> {
             ';' => Token::SEMICOLON,
             '.' => Token::PERIOD,
             '#' => Token::HASH,
+            '~' => Token::TILDE,
             '@' => Token::AT,
             ',' => Token::COMMA,
             _ => Token::WHITESPACE_MERGED,

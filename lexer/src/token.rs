@@ -28,8 +28,8 @@ pub enum Token {
     COMMA,
     HASH,
     IDENT(String),
-    D_LITERAL(String, bool),
-    S_LITERAL(String, bool),
+    D_LITERAL(String),
+    S_LITERAL(String),
     D_NUMBER(String),
     B_NUMBER(String),
     H_NUMBER(String),
@@ -66,12 +66,12 @@ pub enum Token {
     KEYWORD_VAL,
     KEYWORD_VAR,
     KEYWORD_ONCE,
-    KEYWORD_THIS,
     KEYWORD_USE,
     KEYWORD_NATIVE,
     KEYWORD_DEFINE,
     WHITESPACE_MERGED,
-    KEYWORD_NULL
+    KEYWORD_NULL,
+    TILDE
 }
 
 pub type TokenSpan = Span<Token>;
@@ -96,11 +96,17 @@ impl Token {
         }
     }
 
-    pub fn is_any_literal(&self) -> bool {
+    pub fn is_literal(&self) -> bool {
+        match &self {
+            &Token::D_LITERAL(_) | &Token::S_LITERAL(_) => true,
+            _ => false
+        }
+    }
+
+    pub fn is_number(&self) -> bool {
         match &self {
             &Token::B_NUMBER(_) | &Token::D_NUMBER(_) | &Token::O_NUMBER(_) | &Token::H_NUMBER(_) | &Token::FD_NUMBER(_) => true,
-            &Token::D_LITERAL(_, _) | &Token::S_LITERAL(_, _) => true,
-            _ => false
+            _=> false
         }
     }
 
