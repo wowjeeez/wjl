@@ -2,6 +2,7 @@ use common::LocationDataProvider;
 use common::span::Span;
 use lexer::token::{Token, TokenSpan};
 use crate::errors::ParseError;
+use crate::structures::lexical_expr::Expression;
 use crate::TokenIter;
 
 #[derive(Debug, Clone)]
@@ -32,4 +33,9 @@ pub fn parse_ident_no_expr(smart_iterator: &mut TokenIter, start: TokenSpan) -> 
         return Ok(Span::new(start.start(), next_connector.end(), ident))
     }
     Ok(Span::new(start.start(), start.end(), Identifier::TAIL(content)))
+}
+
+
+pub fn parse_ident(smart_iterator: &mut TokenIter) -> Result<Span<Expression>, ParseError> {
+    
 }

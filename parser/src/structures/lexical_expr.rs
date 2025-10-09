@@ -8,7 +8,8 @@ use crate::errors::ParseError;
 use crate::structures::array::parse_array_decl;
 use crate::structures::function::{parse_async_func_decl, parse_func_decl};
 use crate::structures::object::{parse_object_decl, ObjectField};
-use crate::structures::qualified_ident::{parse_ident_no_expr, Identifier};
+use crate::structures::qualified_ident::{parse_ident, parse_ident_no_expr, Identifier};
+use crate::structures::type_expr::TypeExpression;
 use crate::TokenIter;
 
 #[derive(Debug, Clone)]
@@ -67,7 +68,8 @@ pub enum Expression {
     ObjectDecl(Span<Vec<Span<ObjectField>>>),
     ArrayDecl(Span<Vec<Span<Expression>>>),
     Not(Span<Box<Expression>>),
-    Reference(Span<Identifier>),
+    Reference(Span<Box<Expression>>),
+    Call(Span<Box<Expression>>, Span<Vec<TypeExpression>>, Span<Vec<Expression>>),
     DecimalNumber(String),
     HexNumber(String),
     OctalNumber(String),
@@ -146,7 +148,7 @@ fn parse_expr_side(smart_iterator: &mut TokenIter) -> Result<Span<Expression>, P
             Ok(Expression::ObjectDecl(object))
         }
         Token::L_BRACKET => {
-            let array = parse_array_decl(smart_iterator)?
+            let array = parse_array_decl(smart_iterator)?;
             Ok(Expression::ArrayDecl(array))
         }
         Token::EXCL => {
@@ -160,13 +162,12 @@ fn parse_expr_side(smart_iterator: &mut TokenIter) -> Result<Span<Expression>, P
             Ok(Expression::HashExpr(expr.boxed()))
         }
         Token::IDENT(_) => {
-            let ident = smart_iterator.next_or_expect_expr()?;
-            let ident = parse_ident_no_expr(smart_iterator, ident)?;
-            Ok(Expression::Reference(ident))
+            let ident = parse_ident(smart_iterator)?;
+            Ok(ident.get().clone())
         }
-        Token::D_LITERAL(_, _) | Token::S_LITERAL(_, _) => {
+        Token::D_LITERAL(_) | Token::S_LITERAL(_) => {
             let literal = parse_string_literal(smart_iterator)?;
-            Ok(Expression::Literal(literal))
+            Ok(literal.get().clone())
         }
         Token::D_NUMBER(v) => Ok(Expression::DecimalNumber(v.clone())),
         Token::B_NUMBER(v) => Ok(Expression::BinaryNumber(v.clone())),
