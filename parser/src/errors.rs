@@ -35,4 +35,7 @@ pub enum ParseError {
 
     #[error("invalid argument name")]
     InvalidArgumentName(Location<Token>),
+
+    #[error("invalid automatic assignment in object field")]
+    InvalidAutoAssign(Location<Token>),
 }

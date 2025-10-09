@@ -9,8 +9,9 @@ use crate::TokenIter;
 
 #[derive(Debug, Clone)]
 pub enum ObjectKeyType {
-    Dynamic(Span<TypeExpression>),
+    DynamicType(Span<TypeExpression>),
     Label(String),
+    DynamicRuntime(Span<Expression>),
     SingleLiteral(Span<Expression>) // Only Expression::Literal
 }
 

@@ -16,6 +16,17 @@ impl<T: Default> Span<T> {
         }
     }
 }
+impl<T> Span<T> {
+    pub fn zeroed_with(with: T) -> Span<T> {
+        Span {
+            start_index: 0,
+            end_index: 0,
+            content: with,
+        }
+    }
+}
+
+
 
 impl <T> Span<T> {
     pub fn new(start_index: usize, end_index: usize, content: T) -> Span<T> {
@@ -25,6 +36,8 @@ impl <T> Span<T> {
             end_index,
         }
     }
+
+
 
     pub fn boxed(self) -> Span<Box<T>> {
         Span {

@@ -3,7 +3,7 @@ use common::span::Span;
 use lexer::token::Token;
 use crate::errors::ParseError;
 use crate::structures::function::parse_func_signature;
-use crate::structures::lexical_expr::{parse_literal_expr};
+use crate::structures::lexical_expr::{parse_expr, parse_literal_expr};
 use crate::structures::object_type::{parse_object_dynamic_key_type, ObjectKeyType};
 use crate::structures::qualified_ident::{parse_qualified_ident, Identifier};
 use crate::TokenIter;
@@ -137,13 +137,18 @@ pub fn parse_object_type(smart_iterator: &mut TokenIter) -> Result<Span<TypeExpr
     let brace_open = brace_open.clone();
     let mut elements = vec![];
     loop {
+        if smart_iterator.0.peek_is_fn(|x| x.get() == &Token::R_CURLY) {
+            let (next, _) = smart_iterator.0.next().unwrap();
+            let next = next.clone();
+            return Ok(Span::new(brace_open.start(), next.end(), TypeExpression::ObjectType(elements)))
+        }
         let key = if smart_iterator.0.peek_is_fn(|x| x.get().is_ident()) {
             let (key, _) = smart_iterator.0.next().unwrap();
             let key = key.clone();
             Span::new(key.start(), key.end(), ObjectKeyType::Label(key.get().get_identifier().unwrap()))
         } else {
             let key = parse_object_dynamic_key_type(smart_iterator)?;
-            Span::new(key.start(), key.end(), ObjectKeyType::Dynamic(key))
+            Span::new(key.start(), key.end(), ObjectKeyType::DynamicType(key))
         };
         let location = smart_iterator.get_location();
         let (next, _) = smart_iterator.0.next().ok_or(ParseError::ExpectedToken(location, Token::COLON, None))?;
@@ -153,13 +158,16 @@ pub fn parse_object_type(smart_iterator: &mut TokenIter) -> Result<Span<TypeExpr
             return Err(ParseError::ExpectedToken(location, Token::COLON, Some(next.get().clone())));
         }
         let binding = parse_type_expression(smart_iterator)?;
-        elements.push((key, binding));
         let location = smart_iterator.get_location();
         let (next, _) = smart_iterator.0.next().ok_or(ParseError::ExpectedClosureOrComma(location, Token::R_CURLY, None))?;
+        //TODO! default value (also fix it for the argument parsing because it will not move the loop ahead when a default assignment is found altough it should
+        elements.push((key, binding));
+
         let next = next.clone();
         if next.get() == &Token::R_CURLY {
             return Ok(Span::new(brace_open.start(), next.end(), TypeExpression::ObjectType(elements)))
         }
+
         if next.get() != &Token::COMMA {
             let location = smart_iterator.get_location();
             return Err(ParseError::ExpectedClosureOrComma(location, Token::R_CURLY, Some(next.get().clone())))
@@ -171,6 +179,6 @@ pub fn parse_object_type(smart_iterator: &mut TokenIter) -> Result<Span<TypeExpr
 pub fn parse_constructor_type(smart_iterator: &mut TokenIter) -> Result<Span<TypeExpression>, ParseError> {
     let (new_token, _) = smart_iterator.0.next().unwrap();
     let new_token = new_token.clone();
-    let args = parse_func_signature(smart_iterator)?;
+    let args = parse_func_signature(smart_iterator, Span::zeroed_with(Identifier::TAIL("CTOR".to_string())))?;
     Ok(())
 }
