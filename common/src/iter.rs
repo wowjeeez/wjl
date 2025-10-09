@@ -12,6 +12,10 @@ impl<T> SmartIterator<T> {
             index: None,
         }
     }
+
+    pub fn seek(&mut self, to: usize) {
+        self.index = Some(to);
+    }
     
     pub fn next(&mut self) -> Option<(&T, usize)> {
         let new_index = self.get_next_index();

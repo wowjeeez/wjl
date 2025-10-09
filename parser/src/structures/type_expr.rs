@@ -3,7 +3,7 @@ use common::span::Span;
 use lexer::token::Token;
 use crate::errors::ParseError;
 use crate::structures::function::parse_func_signature;
-use crate::structures::lexical_expr::{parse_expr, parse_literal_expr, parse_string_literal, Expression};
+use crate::structures::lexical_expr::{parse_string_literal, Expression};
 use crate::structures::object_type::{parse_object_dynamic_key_type, ObjectKeyType};
 use crate::structures::qualified_ident::{parse_ident_no_expr, Identifier};
 use crate::TokenIter;

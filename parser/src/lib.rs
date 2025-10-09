@@ -23,6 +23,13 @@ impl TokenIter {
         }
         None
     }
+    
+    pub fn peek_and_next_if_fn(&mut self, predicate: impl Fn(&Token) -> bool) -> Option<TokenSpan> {
+        if self.0.peek_is_fn(|x| predicate(x.get())) {
+            self.0.next();
+        }
+        None
+    }
 
     pub fn next_or_expect_expr(&mut self) -> Result<TokenSpan, ParseError> {
         let location = self.get_location();
