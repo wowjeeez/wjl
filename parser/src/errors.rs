@@ -38,4 +38,7 @@ pub enum ParseError {
 
     #[error("invalid automatic assignment in object field")]
     InvalidAutoAssign(Location<Token>),
+
+    #[error("expected expression got {1:?} instead")]
+    ExpectedExpression(Location<Token>, Option<Token>),
 }

@@ -47,11 +47,9 @@ pub fn parse_object_decl(smart_iterator: &mut TokenIter) -> Result<Span<Vec<Span
     }
     let mut entries = vec![];
     loop {
-        if smart_iterator.0.peek_is_fn(|x| x.get() == &Token::R_CURLY) {
-            let (next, _) = smart_iterator.0.next().unwrap();
+        if let Some(next) = smart_iterator.ensure_then_next(Token::R_CURLY) {
             return Ok(Span::new(opening.start(), next.end(), entries))
         }
-
         let (key, key_span) = if smart_iterator.0.peek_is_fn(|x| x.get().is_ident()) {
             let (ident, _) = smart_iterator.0.next().unwrap();
             (ObjectKeyType::Label(ident.get().get_identifier().unwrap()), ident.clone())
@@ -85,7 +83,7 @@ pub fn parse_object_decl(smart_iterator: &mut TokenIter) -> Result<Span<Vec<Span
             continue
         }
         //TODO! default value (also fix it for the argument parsing because it will not move the loop ahead when a default assignment is found altough it should
-        
+
         //TODO! ... spread syntax
         let location = smart_iterator.get_location();
         return Err(ParseError::ExpectedClosureOrComma(location, Token::R_CURLY, Some(next.get().clone())))

@@ -18,8 +18,7 @@ pub fn parse_array_decl(smart_iterator: &mut TokenIter) -> Result<Span<Vec<Span<
     let mut entries = vec![];
 
     loop {
-        if smart_iterator.0.peek_is_fn(|x| x.get() == &Token::R_BRACKET) {
-            let (next, _) = smart_iterator.0.next().unwrap();
+        if let Some(next) = smart_iterator.ensure_then_next(Token::R_BRACKET) {
             return Ok(Span::new(opening.start(), next.end(), entries))
         }
         let expr = parse_expr(smart_iterator)?;

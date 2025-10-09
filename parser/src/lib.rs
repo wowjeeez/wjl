@@ -16,6 +16,44 @@ impl LocationDataProvider<Token> for TokenIter {
     }
 }
 
+impl TokenIter {
+    pub fn ensure_then_next(&mut self, rhs: Token) -> Option<TokenSpan> {
+        if self.0.peek_is_fn(|x| x.get() == &rhs) {
+            self.0.next();
+        }
+        None
+    }
+
+    pub fn next_or_expect_expr(&mut self) -> Result<TokenSpan, ParseError> {
+        let location = self.get_location();
+        let (next, _) = self.0.next().ok_or(ParseError::ExpectedExpression(location, None))?;
+        return Ok(next.clone())
+    }
+
+    pub fn next_expect_token(&mut self, expected: Token) -> Result<TokenSpan, ParseError>  {
+        let location = self.get_location();
+        let (next, _) = self.0.next().ok_or(ParseError::ExpectedToken(location, expected.clone(), None))?;
+        let next = next.clone();
+        let location = self.get_location();
+        if next.get() != &expected {
+            return Err(ParseError::ExpectedToken(location, expected.clone(), Some(next.get().clone())))
+        }
+        Ok(next.clone())
+    }
+
+    pub fn next_expect_closure_or_comma(&mut self, expected: Token) -> Result<TokenSpan, ParseError>  {
+        let location = self.get_location();
+        let (next, _) = self.0.next().ok_or(ParseError::ExpectedClosureOrComma(location, expected.clone(), None))?;
+        let next = next.clone();
+        let location = self.get_location();
+        if next.get() != &expected {
+            return Err(ParseError::ExpectedClosureOrComma(location, expected.clone(), Some(next.get().clone())))
+        }
+        Ok(next.clone())
+    }
+
+}
+
 pub fn to_parse_tree(token_stream: Vec<Span<Token>>) -> Result<(), ParseError> {
     let iter = SmartIterator::new(token_stream);
     let mut token_iter = TokenIter(iter);
