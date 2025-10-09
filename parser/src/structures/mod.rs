@@ -1,9 +1,9 @@
 pub mod function;
 pub mod qualified_ident;
-mod type_expr;
-mod lexical_expr;
-mod object_type;
-mod object;
-mod variable;
-mod array;
-mod block;
+pub mod type_expr;
+pub mod lexical_expr;
+pub mod object_type;
+pub mod object;
+pub mod variable;
+pub mod array;
+pub mod block;

@@ -1,5 +1,3 @@
-use std::process::id;
-use common::iter::SmartIterator;
 use common::LocationDataProvider;
 use common::span::Span;
 use lexer::token::{Token, TokenSpan};
@@ -14,11 +12,11 @@ use crate::structures::variable::VariableName;
 use crate::TokenIter;
 
 
-pub fn parse_async_func_decl(smart_iterator: &mut TokenIter) -> Result<(), ParseError> {
+pub fn parse_async_func_decl(smart_iterator: &mut TokenIter) -> Result<FunctionDeclaration, ParseError> {
     Ok(())
 }
 
-pub fn parse_func_decl(smart_iterator: &mut TokenIter, root: TokenSpan) -> Result<(), ParseError> {
+pub fn parse_func_decl(smart_iterator: &mut TokenIter, root: TokenSpan) -> Result<FunctionDeclaration, ParseError> {
     let qualified_name = parse_ident(smart_iterator)?;
     let args = parse_func_signature(smart_iterator, qualified_name)?;
     return Ok(())
@@ -34,7 +32,6 @@ pub struct FunctionDeclaration {
 }
 
 pub fn parse_func_signature(smart_iterator: &mut TokenIter, name: Span<Expression>) -> Result<(), ParseError> {
-    let location = smart_iterator.get_location();
     let generics = if smart_iterator.0.peek_is_fn(|x| x.get() == &Token::L_ANGLE) {
         Some(parse_generic_args(smart_iterator)?)
     } else {

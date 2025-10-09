@@ -1,5 +1,4 @@
 pub mod token;
-mod literal;
 
 use std::fmt::Write;
 use common::iter::SmartIterator;

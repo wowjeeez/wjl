@@ -235,24 +235,26 @@ fn parse_expr_side(smart_iterator: &mut TokenIter) -> Result<Span<Expression>, P
 }
 
 fn parse_call_expr(smart_iterator: &mut TokenIter, receiver: Span<Expression>) -> Result<Span<Expression>, ParseError> {
-
+    todo!()
 }
+
 #[derive(Clone, Eq, PartialEq)]
 enum ReparseModifiers {
     NonNullAssertion,
     OptionalChain
 }
 
-fn parse_ternary(smart_iterator: &mut TokenIter, condition: Span<Expression>) -> Result<Span<Expression>, ParseError> {
-    Ok(())
+fn parse_ternary_expr(smart_iterator: &mut TokenIter, condition: Span<Expression>) -> Result<Span<Expression>, ParseError> {
+    todo!();
 }
 
 fn reparse_postfix_expr(smart_iterator: &mut TokenIter, expression: Span<Expression>, modifiers: Vec<ReparseModifiers>) -> Result<Span<Expression>, ParseError> {
-    let next = smart_iterator.0.peek();
+    let next = smart_iterator.0.peek().clone();
     if next.is_none() {
         return Ok(expression);
     }
-    let next = next.unwrap();
+    let original = expression.clone();
+    let next = next.unwrap().clone();
     let mut modifiers = modifiers.clone();
     let reparsed = match next.get() {
         &Token::L_PAREN => Some(parse_call_expr(smart_iterator, expression)?),
@@ -264,7 +266,7 @@ fn reparse_postfix_expr(smart_iterator: &mut TokenIter, expression: Span<Express
                 modifiers.push(ReparseModifiers::NonNullAssertion)
             }
             smart_iterator.0.next();
-            Some(reparse_postfix_expr(smart_iterator, expression, modifiers)?)
+            Some(reparse_postfix_expr(smart_iterator, expression, modifiers.clone())?)
         },
         &Token::L_BRACKET | &Token::PERIOD | &Token::D_COLON => {
             if next.get() == &Token::PERIOD || next.get() == &Token::D_COLON {
@@ -279,7 +281,7 @@ fn reparse_postfix_expr(smart_iterator: &mut TokenIter, expression: Span<Express
                 generic_args: None
             });
             let mut tail = match ident.get() {
-                Expression::PropertyAccess(ident) => ident,
+                Expression::PropertyAccess(ident) => ident.clone(),
                 _ => unreachable!()
             };
             tail.insert(0, Span::new(start, next.end(), first_node));
@@ -287,9 +289,16 @@ fn reparse_postfix_expr(smart_iterator: &mut TokenIter, expression: Span<Express
             Some(ident)
         },
         Token::QMARK => {
-            Some(parse_ternary(smart_iterator, expression)?)
-        }
+            Some(parse_ternary_expr(smart_iterator, expression)?)
+        },
+        _ => None
+    }.clone();
+
+    if reparsed.is_some() {
+        return reparse_postfix_expr(smart_iterator, reparsed.unwrap(), modifiers);
     }
+    Ok(original)
+
 }
 
 pub fn parse_expr(smart_iterator: &mut TokenIter) -> Result<Span<Expression>, ParseError> {

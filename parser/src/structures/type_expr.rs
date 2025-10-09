@@ -189,5 +189,5 @@ pub fn parse_constructor_type(smart_iterator: &mut TokenIter) -> Result<Span<Typ
     let (new_token, _) = smart_iterator.0.next().unwrap();
     let new_token = new_token.clone();
     let args = parse_func_signature(smart_iterator, Span::zeroed_with(Expression::Nonce))?;
-    Ok(())
+    todo!()
 }
